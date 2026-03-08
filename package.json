@@ -4,7 +4,7 @@
   "description": "Shopfront is a text-to-website platform for small businesses. Owners update their public business page by sending SMS or WhatsApp messages to an AI agent.",
   "main": "dist/index.js",
   "scripts": {
-    "test": "tsx --test --test-concurrency=1 tests/**/*.test.ts",
+    "test": "sh -c 'tsx --test --test-concurrency=1 $(find tests -name \"*.test.ts\" -print)'",
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
