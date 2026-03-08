@@ -182,11 +182,58 @@ Verification completed:
 - `npm run lint` passed
 - `npm run build` passed
 
+### Step 6 - Intent Classification Pipeline (Completed)
+
+Implemented:
+- Intent taxonomy and result schema in `src/agent/intents.ts`
+- Intent classifier in `src/agent/classifier.ts`
+  - Claude Haiku classification path
+  - Heuristic fallback path for local/test mode
+  - Confidence threshold handling (`< 0.7` => clarification)
+  - Media/photo-aware classification
+  - Shop-context-aware confidence improvement using known service names
+- Intent router in `src/agent/router.ts`
+  - Stub handlers for all intent categories
+  - Clarification-first return when `needsClarification=true`
+  - Special responses for `greeting`, `help`, `unknown`
+- `processMessage()` integration for existing shops in `src/services/agent.ts`
+  - Known phone -> load history/state -> classify -> route -> reply
+  - New/unknown phone onboarding behavior preserved
+
+Classifier hardening updates:
+- Added support for typo/slang and natural phrasing:
+  - `chg fade to 35 pls` => `update_service`
+  - `take off fade` => `remove_service`
+  - `remove that sign now` => `remove_notice`
+- Improved query vs update-hours intent precedence:
+  - `Show my hours` => `query`
+- Reduced flaky test behavior by using unique phone numbers in integration tests
+
+Tests added/updated:
+- `tests/classifier.test.ts`
+  - Covers all intent categories
+  - At least 5 example messages per intent
+  - Includes ambiguity/clarification and context-confidence assertions
+- `tests/router.test.ts`
+  - Verifies intent-to-stub dispatch and clarification override behavior
+- `tests/agent-existing-shop.integration.test.ts`
+  - End-to-end existing-shop path: classify + route through `processMessage`
+
+Verification completed:
+- Classifier identifies all intents on sample sets
+- Confidence scoring triggers clarification for ambiguous messages
+- Router dispatches correctly for all stub intents
+- Shop context improves classification confidence
+- Per-intent examples meet >=5 coverage requirement
+- Full test suite passes (`15/15`)
+- `npm run lint` passed
+- `npm run build` passed
+
 ---
 
 ## Current Status
 
-Completed through Step 5 of the implementation guide.
+Completed through Step 6 of the implementation guide.
 
 Next target:
-- Step 6: Intent classification pipeline for existing shops.
+- Step 7: Entity extraction + mutation handlers with confirmation flow.

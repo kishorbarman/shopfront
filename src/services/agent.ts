@@ -1,13 +1,16 @@
+import { classifyIntent, isPhotoIntentFromMedia } from '../agent/classifier';
+import { runOnboarding } from '../agent/onboarding';
+import { routeMessage } from '../agent/router';
 import { prisma } from '../lib/prisma';
 import type { InboundMessage } from '../models/types';
 import {
   addMessage,
   checkRateLimit,
+  getHistory,
   getState,
   setState,
   type ConversationState,
 } from './conversationState';
-import { runOnboarding } from '../agent/onboarding';
 
 function createStateForUnknownShop(): ConversationState {
   return {
@@ -34,7 +37,12 @@ export async function processMessage(message: InboundMessage): Promise<string> {
 
   const existingShop = await prisma.shop.findUnique({
     where: { phone: message.from },
-    select: { id: true },
+    include: {
+      services: {
+        where: { isActive: true },
+        select: { name: true },
+      },
+    },
   });
 
   let state = await getState(message.from);
@@ -51,8 +59,41 @@ export async function processMessage(message: InboundMessage): Promise<string> {
     state = onboarding.state;
     response = onboarding.response;
   } else {
-    state.lastMessageAt = new Date().toISOString();
-    response = `Got your message (${state.mode}): ${message.body}`;
+    const history = await getHistory(message.from);
+
+    let classification = await classifyIntent(
+      message.body,
+      {
+        name: existingShop.name,
+        services: existingShop.services.map((service) => service.name),
+      },
+      history,
+      { hasMedia: message.mediaUrls.length > 0 },
+    );
+
+    if (isPhotoIntentFromMedia(message.body, message.mediaUrls.length > 0)) {
+      classification = {
+        ...classification,
+        intent: 'update_photo',
+        confidence: Math.max(classification.confidence, 0.9),
+        needsClarification: false,
+      };
+    }
+
+    response = await routeMessage(message, classification, state, existingShop);
+    state = {
+      ...state,
+      mode: 'active',
+      shopId: existingShop.id,
+      lastMessageAt: new Date().toISOString(),
+    };
+
+    console.log('Intent classification', {
+      phone: message.from,
+      intent: classification.intent,
+      confidence: classification.confidence,
+      needsClarification: classification.needsClarification,
+    });
   }
 
   await setState(message.from, state);
