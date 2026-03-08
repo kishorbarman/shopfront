@@ -17,7 +17,7 @@ FROM node:20-slim AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 
-RUN groupadd -r shopfront && useradd -r -g shopfront shopfront
+RUN addgroup --system shopfront && adduser --system --ingroup shopfront shopfront
 
 COPY --from=build /app/package.json /app/package-lock.json ./
 COPY --from=build /app/node_modules ./node_modules
