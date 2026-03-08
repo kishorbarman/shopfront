@@ -237,3 +237,62 @@ Completed through Step 6 of the implementation guide.
 
 Next target:
 - Step 7: Entity extraction + mutation handlers with confirmation flow.
+
+### Step 7 - Entity Extraction + Update Handlers (In Progress)
+
+Implemented:
+- Added mutation extraction module in `src/agent/extractors.ts`
+  - Intent-specific extraction for:
+    - `add_service`
+    - `update_service`
+    - `remove_service`
+    - `update_hours`
+    - `temp_closure`
+    - `update_contact`
+    - `add_notice`
+    - `remove_notice`
+    - `update_photo`
+  - Added confirmation message builder per mutation intent
+  - Added query formatter for current services/hours/notices
+- Added DB mutation service in `src/services/shopUpdater.ts`
+  - `addService`, `updateService`, `removeService` (soft delete)
+  - `updateHours`
+  - `addNotice`, `removeNotice`
+  - `updateContact`
+  - shop `updatedAt` touch behavior after mutations
+- Updated `src/services/agent.ts`
+  - Full pending-action confirmation flow:
+    - confirm => execute mutation
+    - cancel => abort + clear pending action
+    - unrelated next message => clear pending action + reclassify
+  - Query intent now reads current data and returns formatted response
+
+Hardening/Fixes completed:
+- Classifier precedence fix in `src/agent/classifier.ts`:
+  - query phrases like "Show notices" are classified as `query` (not `add_notice`)
+- Improved messy service extraction in `src/agent/extractors.ts`:
+  - Removed unsafe fallback to first service
+  - Improved phrase stripping for update-service parsing (e.g. "Change hot towel to 22")
+- Updated integration fixture in `tests/agent-existing-shop.integration.test.ts`
+  - Added `Hot Towel Shave` seed service for fuzzy-match coverage
+
+Tests added/updated:
+- Added `tests/extractors.test.ts` for entity extraction coverage
+- Updated `tests/agent-existing-shop.integration.test.ts` for:
+  - confirm -> execute
+  - cancel flow
+  - unrelated-message redirect
+  - query responses (services/hours/notices)
+  - fuzzy service matching
+
+Latest verification run:
+- `npm test` => pass (`28/28`)
+- `npm run lint` => pass
+- `npm run build` => pass
+
+Verification status mapping:
+- Entity extraction from natural language => verified (unit tests)
+- Confirmation flow (confirm/cancel/redirect) => verified (integration tests)
+- Query responses accurate for current data => verified (integration tests)
+- Fuzzy matching for typos/abbreviations => verified (unit + integration tests)
+- DB mutation verification => partially covered in integration tests; full per-intent mutation integration expansion pending in next pass

@@ -108,6 +108,16 @@ function classifyHeuristically(
     return { intent: 'help', confidence: 0.95, needsClarification: false };
   }
 
+  if (
+    /(^|\b)(what|show|list|which|how much|price)(\b|\?)/.test(text) ||
+    /\bshow my hours\b/.test(text) ||
+    /\bwhat are my hours\b/.test(text) ||
+    /\bshow notices?\b/.test(text) ||
+    /\blist notices?\b/.test(text)
+  ) {
+    return { intent: 'query', confidence: 0.82, needsClarification: false };
+  }
+
   if (/(take down|remove).*notice|(take down|remove).*sign|remove notice|delete notice/.test(text)) {
     return { intent: 'remove_notice', confidence: 0.9, needsClarification: false };
   }
@@ -118,14 +128,6 @@ function classifyHeuristically(
 
   if (/(vacation|closed next|closed on|temp closed|temporarily closed)/.test(text)) {
     return { intent: 'temp_closure', confidence: 0.85, needsClarification: false };
-  }
-
-  if (
-    /(^|\b)(what|show|list|which|how much|price)(\b|\?)/.test(text) ||
-    /\bshow my hours\b/.test(text) ||
-    /\bwhat are my hours\b/.test(text)
-  ) {
-    return { intent: 'query', confidence: 0.82, needsClarification: false };
   }
 
   if (/(hours|open|close|closing|opening|friday|monday|sunday)/.test(text)) {
