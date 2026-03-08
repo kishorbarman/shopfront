@@ -94,11 +94,46 @@ Verification completed:
 - `npm run lint` passed
 - `npm run build` passed
 
+### Step 4 - Redis Conversation State Management (Completed)
+
+Implemented:
+- Redis singleton client in `src/lib/redis.ts`
+  - Uses `REDIS_URL` (default `redis://localhost:6379`)
+  - Handles connection errors with graceful logging
+- Conversation state service in `src/services/conversationState.ts`
+  - `getState(phone)`
+  - `setState(phone, state)` with 24h TTL
+  - `clearState(phone)`
+- Message history support:
+  - `addMessage(phone, role, content)`
+  - `getHistory(phone)`
+  - Stores only last 10 messages
+  - 7-day TTL
+- Rate limiting:
+  - `checkRateLimit(phone)`
+  - Max 20 messages/hour using Redis `INCR` + expiry
+- Updated placeholder `processMessage(message)` pipeline:
+  - Checks rate limit and returns slow-down response when exceeded
+  - Loads or creates conversation state
+  - Adds inbound message to history
+  - Logs current state
+  - Echoes with mode: `Got your message ({mode}): {body}`
+  - Adds agent response to history
+- Unit tests in `tests/conversationState.test.ts` using dedicated test Redis DB
+
+Verification completed:
+- State persists and is retrievable for same phone number
+- Message history trims correctly to 10
+- Rate limiter blocks after 20 messages/hour
+- Unit test suite passed (`4/4`)
+- `npm run lint` passed
+- `npm run build` passed
+
 ---
 
 ## Current Status
 
-Completed through Step 3 of the implementation guide.
+Completed through Step 4 of the implementation guide.
 
 Next target:
-- Step 4: Redis conversation state management (state, history, rate limiting).
+- Step 5: Onboarding flow state machine and parser integration.
