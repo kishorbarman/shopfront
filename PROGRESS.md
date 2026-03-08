@@ -129,11 +129,64 @@ Verification completed:
 - `npm run lint` passed
 - `npm run build` passed
 
+### Step 5 - Onboarding Flow (Completed)
+
+Implemented:
+- Full onboarding state machine in `src/agent/onboarding.ts`:
+  - Step 1: Welcome + business name capture
+  - Step 2: Category capture
+  - Step 3: Services capture
+  - Step 4: Services confirmation/correction
+  - Step 5: Hours capture
+  - Step 6: Address capture
+  - Step 7: Completion + persistence + activation
+- LLM parser layer in `src/agent/parsers.ts`:
+  - `parseBusinessName`
+  - `parseCategory`
+  - `parseServices`
+  - `parseHours`
+  - Uses Claude Haiku when API key is available
+  - Includes deterministic fallback parsing for local/test mode
+- Agent routing update in `src/services/agent.ts`:
+  - Unknown phone numbers enter onboarding flow
+  - Known shops remain active mode
+  - State and history remain integrated with Redis
+- Onboarding completion persists data to PostgreSQL:
+  - Creates `Shop`
+  - Creates `Service[]`
+  - Creates `Hour[]`
+  - Sets shop status to `ACTIVE`
+- Slug generation logic:
+  - lowercased + hyphenated
+  - deduplicated
+  - unique suffixing (`-2`, `-3`, etc.) when needed
+
+Parser hardening update:
+- Improved messy service parsing fallback to handle number words:
+  - "haircut twenty five"
+  - "lineup ten and shave twenty"
+  - "beard trim for fifteen"
+- Hours parser verified for:
+  - "mon thru fri 9-6"
+
+Tests added:
+- `tests/onboarding.integration.test.ts` (full onboarding happy path)
+- `tests/parsers.test.ts` (messy parser inputs)
+
+Verification completed:
+- Full onboarding from new number creates shop + services + hours
+- Slug generation works and uniqueness verified
+- Conversation state progression tracked step-by-step
+- Parsers handle messy hours and services examples
+- Integration + unit tests pass (`8/8`)
+- `npm run lint` passed
+- `npm run build` passed
+
 ---
 
 ## Current Status
 
-Completed through Step 4 of the implementation guide.
+Completed through Step 5 of the implementation guide.
 
 Next target:
-- Step 5: Onboarding flow state machine and parser integration.
+- Step 6: Intent classification pipeline for existing shops.

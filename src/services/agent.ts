@@ -1,3 +1,4 @@
+import { prisma } from '../lib/prisma';
 import type { InboundMessage } from '../models/types';
 import {
   addMessage,
@@ -6,11 +7,20 @@ import {
   setState,
   type ConversationState,
 } from './conversationState';
+import { runOnboarding } from '../agent/onboarding';
 
-function createInitialState(): ConversationState {
+function createStateForUnknownShop(): ConversationState {
   return {
     mode: 'onboarding',
-    onboardingStep: 1,
+    onboardingStep: undefined,
+    lastMessageAt: new Date().toISOString(),
+  };
+}
+
+function createStateForKnownShop(shopId: string): ConversationState {
+  return {
+    mode: 'active',
+    shopId,
     lastMessageAt: new Date().toISOString(),
   };
 }
@@ -22,11 +32,29 @@ export async function processMessage(message: InboundMessage): Promise<string> {
     return "You're sending messages too quickly. Please slow down and try again in a minute.";
   }
 
-  const state = (await getState(message.from)) ?? createInitialState();
+  const existingShop = await prisma.shop.findUnique({
+    where: { phone: message.from },
+    select: { id: true },
+  });
+
+  let state = await getState(message.from);
+  if (!state) {
+    state = existingShop ? createStateForKnownShop(existingShop.id) : createStateForUnknownShop();
+  }
 
   await addMessage(message.from, 'user', message.body);
 
-  state.lastMessageAt = new Date().toISOString();
+  let response: string;
+
+  if (!existingShop || state.mode === 'onboarding') {
+    const onboarding = await runOnboarding(message, state);
+    state = onboarding.state;
+    response = onboarding.response;
+  } else {
+    state.lastMessageAt = new Date().toISOString();
+    response = `Got your message (${state.mode}): ${message.body}`;
+  }
+
   await setState(message.from, state);
 
   console.log('Conversation state', {
@@ -36,7 +64,6 @@ export async function processMessage(message: InboundMessage): Promise<string> {
     shopId: state.shopId ?? null,
   });
 
-  const response = `Got your message (${state.mode}): ${message.body}`;
   await addMessage(message.from, 'agent', response);
 
   return response;
