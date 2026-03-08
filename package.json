@@ -1,0 +1,42 @@
+{
+  "name": "shopfront",
+  "version": "1.0.0",
+  "description": "Shopfront is a text-to-website platform for small businesses. Owners update their public business page by sending SMS or WhatsApp messages to an AI agent.",
+  "main": "dist/index.js",
+  "scripts": {
+    "test": "echo \"No tests yet\"",
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "lint": "eslint .",
+    "prisma:migrate": "prisma migrate dev --name init",
+    "prisma:seed": "prisma db seed"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.78.0",
+    "@prisma/client": "^6.16.2",
+    "dotenv": "^17.3.1",
+    "fastify": "^5.8.2",
+    "ioredis": "^5.10.0",
+    "prisma": "^6.16.2",
+    "twilio": "^5.12.2"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.5",
+    "@typescript-eslint/eslint-plugin": "^8.56.1",
+    "@typescript-eslint/parser": "^8.56.1",
+    "eslint": "^10.0.3",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.8.1",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  },
+  "private": true,
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  }
+}

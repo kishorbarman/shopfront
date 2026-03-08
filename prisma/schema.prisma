@@ -1,0 +1,80 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Shop {
+  id        String     @id @default(uuid())
+  name      String
+  slug      String     @unique
+  category  String
+  phone     String     @unique
+  address   String?
+  latitude  Float?
+  longitude Float?
+  photoUrl  String?
+  status    ShopStatus @default(ONBOARDING)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  services  Service[]
+  hours     Hour[]
+  notices   Notice[]
+}
+
+enum ShopStatus {
+  ONBOARDING
+  ACTIVE
+  PAUSED
+  CHURNED
+}
+
+model Service {
+  id          String   @id @default(uuid())
+  shopId      String
+  shop        Shop     @relation(fields: [shopId], references: [id])
+  name        String
+  price       Decimal  @db.Decimal(10, 2)
+  description String?
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([shopId])
+}
+
+model Hour {
+  id        String  @id @default(uuid())
+  shopId    String
+  shop      Shop    @relation(fields: [shopId], references: [id])
+  dayOfWeek Int
+  openTime  String
+  closeTime String
+  isClosed  Boolean @default(false)
+
+  @@unique([shopId, dayOfWeek])
+  @@index([shopId])
+}
+
+model Notice {
+  id        String     @id @default(uuid())
+  shopId    String
+  shop      Shop       @relation(fields: [shopId], references: [id])
+  message   String
+  type      NoticeType @default(INFO)
+  startsAt  DateTime   @default(now())
+  expiresAt DateTime?
+  createdAt DateTime   @default(now())
+
+  @@index([shopId])
+}
+
+enum NoticeType {
+  INFO
+  WARNING
+  CLOSURE
+}
