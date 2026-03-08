@@ -1,5 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 
+import config from '../config';
+
 const EXTRACTION_SYSTEM_PROMPT =
   "You are a data extraction assistant. Extract structured data from the user's message. Respond ONLY with valid JSON.";
 
@@ -9,11 +11,11 @@ type ParsedHour = { dayOfWeek: number; open: string; close: string; isClosed: bo
 let anthropicClient: Anthropic | null = null;
 
 function getAnthropicClient(): Anthropic | null {
-  if (process.env.MOCK_ANTHROPIC === 'true') {
+  if (config.MOCK_ANTHROPIC) {
     return null;
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = config.ANTHROPIC_API_KEY;
   if (!apiKey) {
     return null;
   }

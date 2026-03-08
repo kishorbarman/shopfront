@@ -316,7 +316,7 @@ Implemented:
   - Media-only/no context => asks banner vs gallery and persists pending action
   - Follow-up response applies choice
 - Updated `src/index.ts` to serve static files under `/public/*`
-- Updated `.env.example` with `PUBLIC_BASE_URL`
+- Updated `.env.example` with `BASE_URL`
 - Added README section documenting photo pipeline behavior
 
 Tests added/updated:
@@ -440,3 +440,58 @@ Step 10 verification mapping:
 - Pre-built HTML is served correctly with cache headers => verified
 - Full loop E2E test passes => verified
 - Page rebuilds complete in under 2 seconds => verified
+
+### Step 11 - Deployment & Infrastructure (Completed In Repo; External Validation Partially Pending)
+
+Implemented:
+- Added environment validation and fail-fast config loader:
+  - `src/config.ts`
+  - Validates required env vars: `NODE_ENV`, `PORT`, `DATABASE_URL`, `REDIS_URL`, Twilio vars, `ANTHROPIC_API_KEY`, `BASE_URL`
+- Production server hardening in `src/index.ts`:
+  - Fastify logger (pino)
+  - CORS (`@fastify/cors`)
+  - Helmet (`@fastify/helmet`)
+  - `trustProxy: true`
+  - Graceful shutdown (Fastify + Redis + Prisma)
+  - Request counter hook
+  - Registered `/metrics`
+- Added metrics endpoint:
+  - `src/routes/metrics.ts`
+  - Returns status, timestamp, uptime, requestCount, activeShops
+- Updated runtime modules to use centralized config:
+  - `src/lib/prisma.ts`
+  - `src/lib/redis.ts`
+  - `src/routes/webhook.ts`
+  - `src/services/messaging.ts`
+  - `src/services/mediaStorage.ts`
+  - `src/templates/generator.ts`
+  - `src/agent/classifier.ts`, `src/agent/parsers.ts`, `src/agent/extractors.ts`
+- Added deployment artifacts:
+  - `Dockerfile` (multi-stage, node:20-slim, non-root, exposes 3000)
+  - `.dockerignore`
+  - `docker-compose.prod.yml` (app + postgres16 + redis7 + persistent volumes)
+  - `railway.json`
+  - `.github/workflows/deploy.yml` (lint/test/build + deploy job)
+  - `docs/DEPLOY.md` (Railway step-by-step deployment)
+- Updated env/docs:
+  - `.env.example` uses `BASE_URL`
+  - README and progress docs updated for `BASE_URL`
+
+Verification completed (March 8, 2026):
+- Local quality checks:
+  - `npm run lint` passed
+  - `npm run build` passed
+  - `MOCK_ANTHROPIC=true npm test` passed (`35/35`)
+- Env validation behavior:
+  - Invalid `NODE_ENV=staging` fails fast with clear error
+  - Missing envs fail fast with clear, enumerated errors
+- Docker verification:
+  - Docker image build succeeded: `docker build -t shopfront:step11 .`
+  - Production stack starts successfully via `docker-compose.prod.yml`
+  - `/health` returns `200`
+  - `/metrics` returns `200` after running `prisma migrate deploy` inside container
+
+Remaining external verification (requires user-managed infra/accounts):
+- CI/CD runtime execution on GitHub push to `main`
+- Production URL health check (`https://shopfront.page/health`)
+- Twilio production webhook wiring and live message flow verification

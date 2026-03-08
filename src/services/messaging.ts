@@ -1,6 +1,7 @@
 import twilio from 'twilio';
 
 import type { Channel } from '../models/types';
+import config from '../config';
 
 export interface OutboundMessage {
   to: string;
@@ -19,8 +20,8 @@ function channelPhoneNumber(phone: string, channel: Channel): string {
 }
 
 function getTwilioClient() {
-  const accountSid = process.env.TWILIO_ACCOUNT_SID;
-  const authToken = process.env.TWILIO_AUTH_TOKEN;
+  const accountSid = config.TWILIO_ACCOUNT_SID;
+  const authToken = config.TWILIO_AUTH_TOKEN;
 
   if (!accountSid || !authToken) {
     throw new Error('TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN must be set.');
@@ -30,8 +31,8 @@ function getTwilioClient() {
 }
 
 function getFromNumber(channel: Channel): string {
-  const smsNumber = process.env.TWILIO_SMS_NUMBER;
-  const whatsappNumber = process.env.TWILIO_WHATSAPP_NUMBER;
+  const smsNumber = config.TWILIO_SMS_NUMBER;
+  const whatsappNumber = config.TWILIO_WHATSAPP_NUMBER;
 
   if (channel === 'whatsapp') {
     if (!whatsappNumber) {
@@ -48,7 +49,7 @@ function getFromNumber(channel: Channel): string {
 }
 
 export async function sendMessage(message: OutboundMessage): Promise<string> {
-  if (process.env.SKIP_TWILIO_SEND === 'true') {
+  if (config.SKIP_TWILIO_SEND) {
     const mockSid = `MOCK_${Date.now()}`;
     console.log('Outbound message (skipped Twilio send)', {
       id: mockSid,

@@ -1,0 +1,96 @@
+name: CI and Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: shopfront
+          POSTGRES_PASSWORD: shopfront
+          POSTGRES_DB: shopfront_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U shopfront -d shopfront_test"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    env:
+      NODE_ENV: development
+      PORT: 3000
+      DATABASE_URL: postgresql://shopfront:shopfront@localhost:5432/shopfront_test?schema=public
+      REDIS_URL: redis://localhost:6379
+      ANTHROPIC_API_KEY: test-anthropic-key
+      TWILIO_ACCOUNT_SID: test-account-sid
+      TWILIO_AUTH_TOKEN: test-auth-token
+      TWILIO_SMS_NUMBER: +1234567890
+      TWILIO_WHATSAPP_NUMBER: +1234567890
+      BASE_URL: http://localhost:3000
+      SKIP_TWILIO_VALIDATION: true
+      SKIP_TWILIO_SEND: true
+      MOCK_ANTHROPIC: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Apply migrations
+        run: npx prisma migrate deploy
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+  deploy-railway:
+    needs: ci
+    runs-on: ubuntu-latest
+    if: ${{ secrets.RAILWAY_TOKEN != '' && secrets.RAILWAY_SERVICE != '' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy to Railway
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: railway up --service "${{ secrets.RAILWAY_SERVICE }}" --detach

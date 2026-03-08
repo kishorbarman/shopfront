@@ -1,12 +1,13 @@
 import Redis from 'ioredis';
 
+import config from '../config';
+
 const globalForRedis = globalThis as unknown as {
   redis?: Redis;
 };
 
 function createRedisClient(): Redis {
-  const redisUrl = process.env.REDIS_URL ?? 'redis://localhost:6379';
-  const client = new Redis(redisUrl, {
+  const client = new Redis(config.REDIS_URL, {
     maxRetriesPerRequest: 3,
     enableReadyCheck: true,
   });
@@ -24,6 +25,6 @@ function createRedisClient(): Redis {
 
 export const redis = globalForRedis.redis ?? createRedisClient();
 
-if (process.env.NODE_ENV !== 'production') {
+if (config.NODE_ENV !== 'production') {
   globalForRedis.redis = redis;
 }

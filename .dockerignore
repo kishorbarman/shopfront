@@ -1,0 +1,12 @@
+.git
+.github
+node_modules
+dist
+coverage
+.env
+.env.*
+npm-debug.log*
+public/sites
+public/uploads
+tests
+scripts

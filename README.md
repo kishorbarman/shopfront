@@ -166,7 +166,7 @@ Current message handling is intentionally minimal for Step 3:
   - Output format WebP
   - EXIF stripped
 - Stored files live under `public/uploads/{shopId}/` and are served from `/public/...`.
-- `PUBLIC_BASE_URL` controls absolute URL generation (default example: `http://localhost:3000`).
+- `BASE_URL` controls absolute URL generation (default example: `http://localhost:3000`).
 
 Photo intent behavior:
 - Text like "banner", "main photo", or "profile" + media updates `shop.photoUrl`.

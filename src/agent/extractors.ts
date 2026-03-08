@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 
 import { parseHours } from './parsers';
+import config from '../config';
 
 export type MutationIntent =
   | 'add_service'
@@ -36,11 +37,11 @@ type ExtractionResult =
 let anthropicClient: Anthropic | null = null;
 
 function getAnthropicClient(): Anthropic | null {
-  if (process.env.MOCK_ANTHROPIC === 'true') {
+  if (config.MOCK_ANTHROPIC) {
     return null;
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = config.ANTHROPIC_API_KEY;
   if (!apiKey) {
     return null;
   }

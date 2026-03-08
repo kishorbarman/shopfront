@@ -20,7 +20,9 @@
   "type": "commonjs",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
+    "@fastify/cors": "^11.2.0",
     "@fastify/formbody": "^8.0.2",
+    "@fastify/helmet": "^13.0.2",
     "@fastify/static": "^9.0.0",
     "@prisma/client": "^6.16.2",
     "dotenv": "^17.3.1",

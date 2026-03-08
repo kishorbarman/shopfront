@@ -2,6 +2,7 @@ import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import twilio from 'twilio';
 
 import type { Channel, InboundMessage } from '../models/types';
+import config from '../config';
 import { processMessage } from '../services/agent';
 import { sendMessage } from '../services/messaging';
 
@@ -54,11 +55,11 @@ function normalizeValidationParams(body: TwilioWebhookBody): Record<string, stri
 }
 
 function validateTwilioSignature(request: FastifyRequest<{ Body: TwilioWebhookBody }>): boolean {
-  if (process.env.SKIP_TWILIO_VALIDATION === 'true') {
+  if (config.SKIP_TWILIO_VALIDATION) {
     return true;
   }
 
-  const authToken = process.env.TWILIO_AUTH_TOKEN;
+  const authToken = config.TWILIO_AUTH_TOKEN;
   const signature = request.headers['x-twilio-signature'];
 
   if (!authToken || typeof signature !== 'string') {

@@ -1,4 +1,5 @@
 import type { Hour, Notice, Service, Shop } from '@prisma/client';
+import config from '../config';
 
 type ShopPageData = Shop & {
   services: Service[];
@@ -156,7 +157,7 @@ function hoursMarkup(hours: Hour[]): string {
 }
 
 function shopUrl(shop: Shop): string {
-  const baseUrl = process.env.PUBLIC_BASE_URL?.trim() || 'http://localhost:3000';
+  const baseUrl = config.BASE_URL || 'http://localhost:3000';
   const root = baseUrl.replace(/\/$/, '');
   return `${root}/s/${encodeURIComponent(shop.slug)}`;
 }
@@ -170,7 +171,7 @@ export async function generateShopPage(shop: ShopPageData): Promise<string> {
   const templateKind = getTemplateKind(shop.category);
   const categoryLabel = formatCategory(shop.category);
   const desc = `${shop.name} is a ${categoryLabel.toLowerCase()} business. ${topServicesDescription(shop.services)}`;
-  const ogImage = shop.photoUrl || `${process.env.PUBLIC_BASE_URL?.trim() || 'http://localhost:3000'}/public/default-og.png`;
+  const ogImage = shop.photoUrl || `${config.BASE_URL || 'http://localhost:3000'}/public/default-og.png`;
   const address = shop.address?.trim() || 'Address not provided';
   const mapsQuery = encodeURIComponent(address);
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${mapsQuery}`;

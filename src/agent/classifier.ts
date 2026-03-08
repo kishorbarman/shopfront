@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 
 import { type ClassificationResult, SUPPORTED_INTENTS } from './intents';
+import config from '../config';
 
 interface ClassifierOptions {
   hasMedia?: boolean;
@@ -9,11 +10,11 @@ interface ClassifierOptions {
 let anthropicClient: Anthropic | null = null;
 
 function getAnthropicClient(): Anthropic | null {
-  if (process.env.MOCK_ANTHROPIC === 'true') {
+  if (config.MOCK_ANTHROPIC) {
     return null;
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = config.ANTHROPIC_API_KEY;
   if (!apiKey) {
     return null;
   }

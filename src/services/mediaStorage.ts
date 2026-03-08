@@ -4,6 +4,8 @@ import path from 'node:path';
 
 import sharp from 'sharp';
 
+import config from '../config';
+
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const ALLOWED_FORMATS = new Set(['jpeg', 'jpg', 'png', 'webp']);
 
@@ -28,13 +30,9 @@ function publicRootDir(): string {
 
 function toPublicUrl(relativePath: string): string {
   const normalized = relativePath.replace(/\\/g, '/');
-  const base = process.env.PUBLIC_BASE_URL?.trim();
-  if (!base) {
-    return `/${normalized}`;
-  }
-
-  return `${base.replace(/\/$/, '')}/${normalized}`;
+  return `/${normalized}`;
 }
+
 
 function isAllowedImageFormat(format?: string): boolean {
   if (!format) return false;
@@ -57,8 +55,8 @@ async function validateImageBuffer(imageBuffer: Buffer): Promise<void> {
 }
 
 function ensureTwilioCredentials(): { accountSid: string; authToken: string } {
-  const accountSid = process.env.TWILIO_ACCOUNT_SID;
-  const authToken = process.env.TWILIO_AUTH_TOKEN;
+  const accountSid = config.TWILIO_ACCOUNT_SID;
+  const authToken = config.TWILIO_AUTH_TOKEN;
 
   if (!accountSid || !authToken) {
     throw new Error('TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN are required to download Twilio media.');
