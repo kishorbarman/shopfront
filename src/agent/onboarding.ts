@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 
 import { prisma } from '../lib/prisma';
+import { rebuildSite } from '../services/siteBuilder';
 import type { InboundMessage } from '../models/types';
 import type { ConversationState } from '../services/conversationState';
 import { parseBusinessName, parseCategory, parseHours, parseServices } from './parsers';
@@ -302,6 +303,7 @@ export async function runOnboarding(
 
     const updatedDraft = { ...draft, address };
     const { shopId, slug } = await completeOnboarding(message.from, updatedDraft);
+    await rebuildSite(shopId);
 
     return {
       response: `Your page is live! shopfront.page/${slug} - You can update anything anytime, just text me.`,

@@ -11,7 +11,8 @@
     "lint": "eslint .",
     "prisma:migrate": "prisma migrate dev --name init",
     "prisma:seed": "prisma db seed",
-    "test:webhook": "tsx scripts/test-webhook.ts"
+    "test:webhook": "tsx scripts/test-webhook.ts",
+    "test:full-loop": "tsx scripts/test-full-loop.ts"
   },
   "keywords": [],
   "author": "",

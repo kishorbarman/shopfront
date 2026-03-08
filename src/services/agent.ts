@@ -12,6 +12,7 @@ import { routeMessage } from '../agent/router';
 import { prisma } from '../lib/prisma';
 import type { InboundMessage } from '../models/types';
 import { addImagesToGallery, downloadAndStoreImages, type StoredImage } from './mediaStorage';
+import { rebuildSite } from './siteBuilder';
 import {
   addService,
   addNotice,
@@ -127,11 +128,13 @@ async function applyPhotoSelection(
         photoUrl: first.url,
       },
     });
+    await rebuildSite(shopId);
 
     return 'Done! Your new banner photo is live.';
   }
 
   await addImagesToGallery(shopId, storedImages);
+  await rebuildSite(shopId);
   return storedImages.length === 1
     ? 'Done! I added this photo to your gallery.'
     : `Done! I added ${storedImages.length} photos to your gallery.`;

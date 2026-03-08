@@ -14,7 +14,7 @@ const app = Fastify({
   logger: true,
 });
 
-async function buildServer() {
+export async function buildServer() {
   await app.register(formbody);
   await app.register(fastifyStatic, {
     root: path.join(process.cwd(), 'public'),
@@ -27,7 +27,7 @@ async function buildServer() {
   return app;
 }
 
-async function start() {
+export async function start() {
   const port = Number(process.env.PORT ?? 3000);
 
   try {
@@ -39,4 +39,6 @@ async function start() {
   }
 }
 
-void start();
+if (require.main === module) {
+  void start();
+}

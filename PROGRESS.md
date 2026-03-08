@@ -389,3 +389,54 @@ Verification completed (March 8, 2026):
   - `npm run lint` passed
   - `npm run build` passed
   - `npm test` passed (`35/35`)
+
+### Step 10 - Site Rebuild Pipeline + Full Text-to-Website Loop (Completed)
+
+Implemented:
+- Added `src/services/siteBuilder.ts`:
+  - `rebuildSite(shopId)` loads shop + services + hours + active notices
+  - Generates HTML via `generateShopPage`
+  - Writes prebuilt output to `public/sites/{slug}/index.html`
+  - Logs rebuild completion for traceability
+- Added rebuild triggers after successful mutations:
+  - `src/services/shopUpdater.ts` now triggers rebuild after:
+    - add/update/remove service
+    - update hours
+    - add/remove notice
+    - update contact (address changes trigger rebuild)
+- Added rebuild trigger on onboarding completion:
+  - `src/agent/onboarding.ts` calls `rebuildSite(shopId)` once the first shop data is created
+- Added rebuild trigger for photo updates:
+  - `src/services/agent.ts` triggers rebuild after banner photo changes and gallery updates
+- Updated static serving route behavior in `src/routes/pages.ts`:
+  - `GET /s/:slug` now checks prebuilt file first
+  - If missing, rebuilds and serves
+  - Adds cache headers: `Cache-Control: public, max-age=300`
+  - Adds `ETag` and `Last-Modified` based on `shop.updatedAt`
+- Updated `src/index.ts` to export `buildServer()` for script-driven end-to-end tests
+- Added end-to-end loop script `scripts/test-full-loop.ts`:
+  - Simulates onboarding via webhook
+  - Verifies generated page availability
+  - Simulates service price update and verifies HTML reflects change
+  - Simulates temporary closure notice and verifies HTML reflects change
+  - Simulates add-service flow and verifies HTML reflects change
+  - Verifies cache headers on `/s/:slug`
+  - Asserts rebuild cycles complete in under 2 seconds
+  - Cleans up DB + generated files after run
+- Added npm script:
+  - `test:full-loop` in `package.json`
+- Updated `.gitignore`:
+  - Added `public/sites` and `public/uploads` as runtime/generated artifacts
+
+Verification completed (March 8, 2026):
+- `npm run lint` passed
+- `npm run build` passed
+- `npm test` passed
+- `npm run test:full-loop` passed (`Full loop test passed`)
+- Confirmed no lingering E2E runner processes after completion
+
+Step 10 verification mapping:
+- Sending `add lineup for $10` via SMS results in service appearing on live page => verified
+- Pre-built HTML is served correctly with cache headers => verified
+- Full loop E2E test passes => verified
+- Page rebuilds complete in under 2 seconds => verified

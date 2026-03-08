@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 
 import { prisma } from '../lib/prisma';
+import { rebuildSite } from './siteBuilder';
 
 type ServiceUpdates = {
   newPrice?: number;
@@ -60,6 +61,11 @@ async function touchShop(shopId: string): Promise<void> {
   });
 }
 
+async function touchAndRebuild(shopId: string): Promise<void> {
+  await touchShop(shopId);
+  await rebuildSite(shopId);
+}
+
 async function findServiceByFuzzyName(shopId: string, serviceName: string) {
   assertNonEmpty(serviceName, 'serviceName');
 
@@ -78,7 +84,9 @@ async function findServiceByFuzzyName(shopId: string, serviceName: string) {
     return exact;
   }
 
-  const contains = services.find((service) => normalize(service.name).includes(target) || target.includes(normalize(service.name)));
+  const contains = services.find(
+    (service) => normalize(service.name).includes(target) || target.includes(normalize(service.name)),
+  );
   if (contains) {
     return contains;
   }
@@ -124,7 +132,7 @@ export async function addService(
     },
   });
 
-  await touchShop(shopId);
+  await touchAndRebuild(shopId);
   return created;
 }
 
@@ -150,7 +158,7 @@ export async function updateService(shopId: string, serviceName: string, updates
     },
   });
 
-  await touchShop(shopId);
+  await touchAndRebuild(shopId);
   return updated;
 }
 
@@ -165,7 +173,7 @@ export async function removeService(shopId: string, serviceName: string) {
     data: { isActive: false },
   });
 
-  await touchShop(shopId);
+  await touchAndRebuild(shopId);
   return updated;
 }
 
@@ -205,7 +213,7 @@ export async function updateHours(shopId: string, changes: HourChange[]) {
     updates.push(record);
   }
 
-  await touchShop(shopId);
+  await touchAndRebuild(shopId);
   return updates;
 }
 
@@ -242,7 +250,7 @@ export async function addNotice(shopId: string, input: NoticeInput) {
     },
   });
 
-  await touchShop(shopId);
+  await touchAndRebuild(shopId);
   return notice;
 }
 
@@ -264,7 +272,7 @@ export async function removeNotice(shopId: string, noticeId: string) {
     where: { id: noticeId },
   });
 
-  await touchShop(shopId);
+  await touchAndRebuild(shopId);
   return deleted;
 }
 
@@ -279,6 +287,10 @@ export async function updateContact(shopId: string, field: 'phone' | 'address', 
   });
 
   await touchShop(shopId);
+  if (field === 'address') {
+    await rebuildSite(shopId);
+  }
+
   return updated;
 }
 
