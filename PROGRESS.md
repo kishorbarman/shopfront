@@ -296,3 +296,96 @@ Verification status mapping:
 - Query responses accurate for current data => verified (integration tests)
 - Fuzzy matching for typos/abbreviations => verified (unit + integration tests)
 - DB mutation verification => partially covered in integration tests; full per-intent mutation integration expansion pending in next pass
+
+### Step 8 - Photo Handling (Completed)
+
+Implemented:
+- Added `src/services/mediaStorage.ts`:
+  - Twilio-authenticated media download (`downloadMedia`)
+  - Image validation (JPEG/PNG/WebP, max 10MB)
+  - Image processing with Sharp:
+    - max width 1200px for main image
+    - max width 400px thumbnail
+    - WebP conversion
+    - EXIF stripping
+  - Local MVP storage under `public/uploads/{shopId}/`
+  - Gallery manifest support (`gallery.json`)
+- Updated `src/services/agent.ts` photo flow:
+  - Media + banner/profile language => immediate banner update (`shop.photoUrl`)
+  - Media + gallery language => gallery append
+  - Media-only/no context => asks banner vs gallery and persists pending action
+  - Follow-up response applies choice
+- Updated `src/index.ts` to serve static files under `/public/*`
+- Updated `.env.example` with `PUBLIC_BASE_URL`
+- Added README section documenting photo pipeline behavior
+
+Tests added/updated:
+- `tests/mediaStorage.test.ts`
+  - Processing output checks (WebP, size constraints, EXIF removed)
+  - File-based media download validation path
+- `tests/agent-existing-shop.integration.test.ts`
+  - Banner photo update integration test
+  - No-context photo -> clarification -> gallery flow integration test
+
+Verification completed:
+- `npm run lint` passed
+- `npm run build` passed
+- `npm test` passed
+- Photo pipeline verified for download/transform/store and banner/gallery intent handling
+
+### Step 9 - HTML Template Engine + Public Routes (Completed)
+
+Implemented:
+- Added `src/templates/generator.ts`:
+  - `generateShopPage(shop)` returns full HTML string
+  - Sections:
+    - Header (name/category/banner or gradient fallback)
+    - Notices with severity styling
+    - Services/Menu list with prices
+    - Hours table with current-day highlight and closed state
+    - Location with Google Maps link
+    - Contact with tap-to-call and tap-to-text
+    - Footer branding
+  - Mobile-first responsive CSS, no JS, system fonts only
+  - Category accents:
+    - Barber (green/gold)
+    - Restaurant/Food (warm red/brown)
+    - Salon (purple/pink)
+    - General (blue/slate)
+  - Two visual template modes:
+    - `services` (default)
+    - `menu` (restaurant/food-like categories)
+  - SEO/Social:
+    - title, meta description
+    - Open Graph tags
+    - Schema.org LocalBusiness JSON-LD
+- Added `src/routes/pages.ts`:
+  - `GET /s/:slug` (live generated HTML, cache header `public, max-age=300`)
+  - `GET /preview/:shopId` (no-store preview)
+- Registered pages routes in `src/index.ts`
+- Added `tests/page-generator.test.ts`:
+  - Validates required sections + SEO/meta/JSON-LD presence
+  - Validates menu variant rendering for restaurant
+  - Generates visual fixtures for manual review:
+    - `tests/visual-output/tonys-barbershop.html`
+    - `tests/visual-output/sunset-tacos.html`
+- Updated test runner to avoid Redis cross-test flakiness:
+  - `package.json` test script uses `--test-concurrency=1`
+
+Verification completed (March 8, 2026):
+- Route verification:
+  - `GET /s/tonys-barbershop` returns `200` HTML with cache header and complete page
+- Performance:
+  - Lighthouse mobile performance score: `100`
+  - FCP: `0.6s`, LCP: `0.8s`, TBT: `0ms`, CLS: `0`
+- Layout checks:
+  - Captured screenshots at 320px and 1280px (`/tmp/tonys-mobile-320.png`, `/tmp/tonys-desktop-1280.png`)
+  - Visual layout confirmed readable and responsive
+- Section rendering:
+  - Services with prices, hours, notices, location, contact all present in returned HTML
+- Schema validation:
+  - JSON-LD extracted and parsed successfully as valid JSON (`@type: LocalBusiness`)
+- Full suite status:
+  - `npm run lint` passed
+  - `npm run build` passed
+  - `npm test` passed (`35/35`)

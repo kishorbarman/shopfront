@@ -154,3 +154,21 @@ Current message handling is intentionally minimal for Step 3:
 - Inbound messages are normalized into a unified `InboundMessage`
 - Placeholder agent replies with `Got your message: {body}`
 - Outbound response is sent on the same channel
+
+## Photo Handling (Step 8)
+
+- Incoming MMS/WhatsApp media is downloaded using Twilio basic auth (`TWILIO_ACCOUNT_SID` + `TWILIO_AUTH_TOKEN`).
+- Accepted formats: JPEG, PNG, WebP.
+- Maximum file size: 10MB.
+- Images are processed with `sharp`:
+  - Main image resized to max width 1200px
+  - Thumbnail resized to max width 400px
+  - Output format WebP
+  - EXIF stripped
+- Stored files live under `public/uploads/{shopId}/` and are served from `/public/...`.
+- `PUBLIC_BASE_URL` controls absolute URL generation (default example: `http://localhost:3000`).
+
+Photo intent behavior:
+- Text like "banner", "main photo", or "profile" + media updates `shop.photoUrl`.
+- Text like "gallery" + media adds photos to gallery manifest (`public/uploads/{shopId}/gallery.json`).
+- Media without clear context asks: banner or gallery.

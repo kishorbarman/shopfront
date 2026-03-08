@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sunset Tacos - Restaurant | Services &amp; Hours</title>
+  <meta name="description" content="Sunset Tacos is a restaurant business. Top services: Al Pastor Taco, Horchata." />
+  <meta property="og:title" content="Sunset Tacos - Restaurant" />
+  <meta property="og:description" content="Sunset Tacos is a restaurant business. Top services: Al Pastor Taco, Horchata." />
+  <meta property="og:image" content="http://localhost:3000/public/default-og.png" />
+  <meta property="og:url" content="http://localhost:3000/s/sunset-tacos" />
+  <meta property="og:type" content="website" />
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"LocalBusiness","name":"Sunset Tacos","telephone":"+15557654321","address":"742 Evergreen Terrace, Springfield","url":"http://localhost:3000/s/sunset-tacos","openingHoursSpecification":[{"@type":"OpeningHoursSpecification","dayOfWeek":"Sunday"},{"@type":"OpeningHoursSpecification","dayOfWeek":"Monday","opens":"09:00","closes":"19:00"},{"@type":"OpeningHoursSpecification","dayOfWeek":"Tuesday","opens":"09:00","closes":"19:00"},{"@type":"OpeningHoursSpecification","dayOfWeek":"Wednesday","opens":"09:00","closes":"19:00"},{"@type":"OpeningHoursSpecification","dayOfWeek":"Thursday","opens":"09:00","closes":"19:00"},{"@type":"OpeningHoursSpecification","dayOfWeek":"Friday","opens":"09:00","closes":"19:00"},{"@type":"OpeningHoursSpecification","dayOfWeek":"Saturday","opens":"09:00","closes":"19:00"}]}</script>
+  <style>
+    :root {
+      --accent: #8f2f1f;
+      --accent-soft: #f4e1d1;
+      --accent-text: #6e2418;
+      --bg: #f6f7f8;
+      --text: #1d252d;
+      --muted: #576373;
+      --card: #ffffff;
+      --line: #d8dee6;
+      --warn: #ffd66b;
+      --danger: #d94b41;
+      --info: #85bbff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: linear-gradient(180deg, #ffffff, var(--bg));
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.45;
+    }
+    .page {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 0 14px 28px;
+    }
+    .hero {
+      margin-top: 12px;
+      border-radius: 18px;
+      overflow: hidden;
+      background: var(--card);
+      box-shadow: 0 10px 24px rgba(16, 32, 48, 0.08);
+      border: 1px solid var(--line);
+    }
+    .hero-image, .hero-fallback {
+      width: 100%;
+      display: block;
+      min-height: 180px;
+      max-height: 300px;
+      object-fit: cover;
+    }
+    .hero-fallback {
+      background: linear-gradient(120deg, var(--accent), #ffffff 130%);
+    }
+    .hero-content {
+      padding: 14px;
+    }
+    .badge {
+      display: inline-block;
+      background: var(--accent-soft);
+      color: var(--accent-text);
+      border: 1px solid color-mix(in srgb, var(--accent) 40%, #fff 60%);
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+    h1 {
+      margin: 10px 0 0;
+      font-size: 30px;
+      line-height: 1.1;
+    }
+    .section {
+      margin-top: 14px;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px;
+    }
+    .section h2 {
+      margin: 0 0 10px;
+      font-size: 19px;
+    }
+    .notices {
+      display: grid;
+      gap: 8px;
+      background: transparent;
+      border: 0;
+      padding: 0;
+    }
+    .notice {
+      padding: 10px 12px;
+      border-radius: 12px;
+      font-weight: 600;
+      border: 1px solid transparent;
+    }
+    .notice-info { background: color-mix(in srgb, var(--info) 24%, #fff 76%); border-color: var(--info); }
+    .notice-warning { background: color-mix(in srgb, var(--warn) 32%, #fff 68%); border-color: var(--warn); }
+    .notice-closure { background: color-mix(in srgb, var(--danger) 20%, #fff 80%); border-color: var(--danger); }
+    .service-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+    .service-list li { border-bottom: 1px dashed var(--line); padding-bottom: 10px; }
+    .service-list li:last-child { border-bottom: 0; padding-bottom: 0; }
+    .service-row, .menu-top {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .service-row h3, .menu-top h3 { margin: 0; font-size: 17px; }
+    .service-row strong, .menu-top strong { color: var(--accent); font-size: 18px; }
+    .service-list p, .menu-item p { margin: 5px 0 0; color: var(--muted); font-size: 14px; }
+    .menu-grid { display: grid; gap: 10px; }
+    .menu-item {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px;
+      background: #fff;
+    }
+    .hours-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 15px;
+    }
+    .hours-table th, .hours-table td {
+      text-align: left;
+      padding: 9px 6px;
+      border-bottom: 1px solid var(--line);
+    }
+    .hours-table tr.today th, .hours-table tr.today td { background: var(--accent-soft); }
+    .hours-table td.closed { color: var(--danger); font-weight: 700; }
+    .contact-actions {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: 1fr;
+    }
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 48px;
+      border-radius: 12px;
+      text-decoration: none;
+      font-weight: 700;
+      border: 1px solid var(--line);
+      color: var(--text);
+      background: #fff;
+    }
+    .button-primary {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+    .location a {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 700;
+      display: inline-block;
+      margin-top: 6px;
+      padding: 10px 0;
+      min-height: 44px;
+    }
+    .footer {
+      text-align: center;
+      color: var(--muted);
+      padding: 16px 6px 0;
+      font-size: 13px;
+    }
+    .empty { margin: 0; color: var(--muted); }
+    @media (min-width: 720px) {
+      .page { padding: 0 20px 34px; }
+      .hero-content { padding: 18px; }
+      .contact-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .menu-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="hero">
+      <div class="hero-fallback" aria-hidden="true"></div>
+      <div class="hero-content">
+        <span class="badge">Restaurant</span>
+        <h1>Sunset Tacos</h1>
+      </div>
+    </header>
+
+    
+
+    <section class="section" aria-label="Services">
+      <h2>Menu</h2>
+      <div class="menu-grid">
+      <article class="menu-item">
+        <div class="menu-top">
+          <h3>Al Pastor Taco</h3>
+          <strong>$6.50</strong>
+        </div>
+        <p>Pineapple, onion, cilantro</p>
+      </article>
+      <article class="menu-item">
+        <div class="menu-top">
+          <h3>Horchata</h3>
+          <strong>$4</strong>
+        </div>
+        <p>Fresh cinnamon rice drink</p>
+      </article></div>
+    </section>
+
+    <section class="section" aria-label="Hours">
+      <h2>Hours</h2>
+      <table class="hours-table"><tbody><tr class="today">
+        <th>Sunday</th>
+        <td class="closed">Closed</td>
+      </tr><tr class="">
+        <th>Monday</th>
+        <td class="">09:00 - 19:00</td>
+      </tr><tr class="">
+        <th>Tuesday</th>
+        <td class="">09:00 - 19:00</td>
+      </tr><tr class="">
+        <th>Wednesday</th>
+        <td class="">09:00 - 19:00</td>
+      </tr><tr class="">
+        <th>Thursday</th>
+        <td class="">09:00 - 19:00</td>
+      </tr><tr class="">
+        <th>Friday</th>
+        <td class="">09:00 - 19:00</td>
+      </tr><tr class="">
+        <th>Saturday</th>
+        <td class="">09:00 - 19:00</td>
+      </tr></tbody></table>
+    </section>
+
+    <section class="section location" aria-label="Location">
+      <h2>Location</h2>
+      <p>742 Evergreen Terrace, Springfield</p>
+      <a href="https://www.google.com/maps/search/?api=1&query=742%20Evergreen%20Terrace%2C%20Springfield" target="_blank" rel="noopener noreferrer">Open in Google Maps</a>
+    </section>
+
+    <section class="section" aria-label="Contact">
+      <h2>Contact</h2>
+      <div class="contact-actions">
+        <a class="button button-primary" href="tel:+15557654321">Call +15557654321</a>
+        <a class="button" href="sms:+15557654321">Text +15557654321</a>
+      </div>
+    </section>
+
+    <footer class="footer">Powered by Shopfront</footer>
+  </main>
+</body>
+</html>

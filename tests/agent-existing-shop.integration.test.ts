@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
+import { promises as fs } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
+
 import Redis from 'ioredis';
+import sharp from 'sharp';
 
 process.env.REDIS_URL = 'redis://127.0.0.1:6379/15';
 process.env.MOCK_ANTHROPIC = 'true';
@@ -8,6 +13,7 @@ process.env.MOCK_ANTHROPIC = 'true';
 import { prisma } from '../src/lib/prisma';
 import { redis as sharedRedis } from '../src/lib/redis';
 import type { InboundMessage } from '../src/models/types';
+import { getState } from '../src/services/conversationState';
 import { processMessage } from '../src/services/agent';
 
 const localRedis = new Redis(process.env.REDIS_URL);
@@ -38,6 +44,7 @@ async function ensureShop(phone: string) {
       category: 'barber',
       status: 'ACTIVE',
       address: '742 Evergreen Terrace, Springfield',
+      photoUrl: null,
     },
     create: {
       name: "Tony's Barbershop",
@@ -85,10 +92,32 @@ async function ensureShop(phone: string) {
 }
 
 async function cleanupShop(phone: string) {
+  const shop = await prisma.shop.findUnique({ where: { phone }, select: { id: true } });
+  if (shop?.id) {
+    await fs.rm(path.join(process.cwd(), 'public', 'uploads', shop.id), { recursive: true, force: true });
+  }
+
   await prisma.service.deleteMany({ where: { shop: { phone } } });
   await prisma.hour.deleteMany({ where: { shop: { phone } } });
   await prisma.notice.deleteMany({ where: { shop: { phone } } });
   await prisma.shop.deleteMany({ where: { phone } });
+}
+
+async function makeTempImagePath(prefix: string): Promise<string> {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'shopfront-photo-'));
+  const filePath = path.join(dir, `${prefix}.jpg`);
+  await sharp({
+    create: {
+      width: 900,
+      height: 600,
+      channels: 3,
+      background: { r: 100, g: 120, b: 220 },
+    },
+  })
+    .jpeg()
+    .toFile(filePath);
+
+  return filePath;
 }
 
 test.beforeEach(async () => {
@@ -182,5 +211,56 @@ test('fuzzy service matching updates abbreviations/typos', async () => {
   const service = shop.services.find((s) => s.name === 'Hot Towel Shave');
   assert.equal(service?.price.toString(), '22');
 
+  await cleanupShop(phone);
+});
+
+test('photo with banner intent updates shop photoUrl and stores processed image', async () => {
+  const phone = buildPhone();
+  await ensureShop(phone);
+
+  const imagePath = await makeTempImagePath('banner');
+  const response = await processMessage(
+    inbound(phone, 'Make this my main photo', [`file://${encodeURIComponent(imagePath)}`]),
+  );
+
+  assert.match(response, /new banner photo is live/i);
+
+  const shop = await prisma.shop.findUniqueOrThrow({ where: { phone } });
+  assert.ok(shop.photoUrl);
+
+  const storedPath = path.join(process.cwd(), shop.photoUrl!.replace(/^\//, ''));
+  const storedMeta = await sharp(storedPath).metadata();
+  assert.equal(storedMeta.format, 'webp');
+  assert.ok((storedMeta.width ?? 0) <= 1200);
+
+  await fs.rm(path.dirname(imagePath), { recursive: true, force: true });
+  await cleanupShop(phone);
+});
+
+test('photo without context asks banner/gallery and gallery choice is applied', async () => {
+  const phone = buildPhone();
+  await ensureShop(phone);
+
+  const imagePath = await makeTempImagePath('gallery');
+  const first = await processMessage(inbound(phone, '', [`file://${encodeURIComponent(imagePath)}`]));
+  assert.match(first, /main banner|gallery/i);
+
+  const state = await getState(phone);
+  assert.equal(state?.mode, 'awaiting_confirmation');
+  assert.equal(state?.pendingAction?.intent, 'update_photo');
+
+  const second = await processMessage(inbound(phone, 'gallery'));
+  assert.match(second, /added .*gallery|added this photo to your gallery/i);
+
+  const shop = await prisma.shop.findUniqueOrThrow({ where: { phone } });
+  assert.equal(shop.photoUrl, null);
+
+  const galleryPath = path.join(process.cwd(), 'public', 'uploads', shop.id, 'gallery.json');
+  const galleryRaw = await fs.readFile(galleryPath, 'utf8');
+  const galleryEntries = JSON.parse(galleryRaw) as Array<{ url: string; thumbnailUrl: string }>;
+  assert.ok(galleryEntries.length >= 1);
+  assert.ok(galleryEntries[0].url.includes('/public/uploads/'));
+
+  await fs.rm(path.dirname(imagePath), { recursive: true, force: true });
   await cleanupShop(phone);
 });

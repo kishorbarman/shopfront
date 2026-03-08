@@ -11,6 +11,7 @@ import { runOnboarding } from '../agent/onboarding';
 import { routeMessage } from '../agent/router';
 import { prisma } from '../lib/prisma';
 import type { InboundMessage } from '../models/types';
+import { addImagesToGallery, downloadAndStoreImages, type StoredImage } from './mediaStorage';
 import {
   addService,
   addNotice,
@@ -67,6 +68,22 @@ function isMutationIntent(intent: IntentCategory): intent is MutationIntent {
   ].includes(intent);
 }
 
+type PhotoTarget = 'banner' | 'gallery' | 'unknown';
+
+function detectPhotoTarget(text: string): PhotoTarget {
+  const lower = text.toLowerCase();
+
+  if (/(banner|main photo|profile|hero|cover)/.test(lower)) {
+    return 'banner';
+  }
+
+  if (/(gallery|album|add this photo|add this image|portfolio)/.test(lower)) {
+    return 'gallery';
+  }
+
+  return 'unknown';
+}
+
 type ShopContext = Shop & {
   services: Pick<Service, 'name' | 'price'>[];
   hours: Pick<Hour, 'dayOfWeek' | 'openTime' | 'closeTime' | 'isClosed'>[];
@@ -91,6 +108,33 @@ async function loadShopContext(phone: string): Promise<ShopContext | null> {
       },
     },
   }) as unknown as Promise<ShopContext | null>;
+}
+
+async function applyPhotoSelection(
+  shopId: string,
+  target: Exclude<PhotoTarget, 'unknown'>,
+  storedImages: StoredImage[],
+): Promise<string> {
+  if (storedImages.length === 0) {
+    throw new Error('No images available to apply.');
+  }
+
+  if (target === 'banner') {
+    const first = storedImages[0];
+    await prisma.shop.update({
+      where: { id: shopId },
+      data: {
+        photoUrl: first.url,
+      },
+    });
+
+    return 'Done! Your new banner photo is live.';
+  }
+
+  await addImagesToGallery(shopId, storedImages);
+  return storedImages.length === 1
+    ? 'Done! I added this photo to your gallery.'
+    : `Done! I added ${storedImages.length} photos to your gallery.`;
 }
 
 async function executePendingAction(
@@ -197,8 +241,12 @@ async function executePendingAction(
   }
 
   if (intent === 'update_photo') {
+    const target: Exclude<PhotoTarget, 'unknown'> = data.useAsMain === false ? 'gallery' : 'banner';
+    const images = Array.isArray(data.images) ? (data.images as StoredImage[]) : [];
+    const response = await applyPhotoSelection(shop.id, target, images);
+
     return {
-      response: 'Got it. I saved this photo request. Full photo updates land in Step 8.',
+      response,
       state: { ...state, mode: 'active', pendingAction: undefined },
     };
   }
@@ -206,6 +254,66 @@ async function executePendingAction(
   return {
     response: "I couldn't execute that action. Let's try again.",
     state: { ...state, mode: 'active', pendingAction: undefined },
+  };
+}
+
+async function handleMediaForKnownShop(
+  shop: ShopContext,
+  state: ConversationState,
+  message: InboundMessage,
+): Promise<{ response: string; state: ConversationState } | null> {
+  if (message.mediaUrls.length === 0) {
+    return null;
+  }
+
+  let storedImages: StoredImage[];
+  try {
+    storedImages = await downloadAndStoreImages(shop.id, message.mediaUrls);
+  } catch (error) {
+    console.error('Media processing failed:', error);
+    return {
+      response: 'I could not process that image. Please send a JPEG, PNG, or WebP under 10MB.',
+      state: {
+        ...state,
+        mode: 'active',
+        shopId: shop.id,
+        lastMessageAt: new Date().toISOString(),
+      },
+    };
+  }
+
+  const target = detectPhotoTarget(message.body);
+
+  if (target === 'banner' || target === 'gallery') {
+    const response = await applyPhotoSelection(shop.id, target, storedImages);
+    return {
+      response,
+      state: {
+        ...state,
+        mode: 'active',
+        shopId: shop.id,
+        pendingAction: undefined,
+        lastMessageAt: new Date().toISOString(),
+      },
+    };
+  }
+
+  return {
+    response: 'Nice photo! Should I use this as your main banner, or add it to your gallery?',
+    state: {
+      ...state,
+      mode: 'awaiting_confirmation',
+      shopId: shop.id,
+      pendingAction: {
+        intent: 'update_photo',
+        data: {
+          awaitingPhotoTarget: true,
+          images: storedImages,
+        },
+        confirmationMessage: 'Choose banner or gallery.',
+      },
+      lastMessageAt: new Date().toISOString(),
+    },
   };
 }
 
@@ -233,6 +341,60 @@ export async function processMessage(message: InboundMessage): Promise<string> {
     response = onboarding.response;
   } else {
     if (state.mode === 'awaiting_confirmation' && state.pendingAction) {
+      if (state.pendingAction.intent === 'update_photo' && state.pendingAction.data.awaitingPhotoTarget) {
+        const choice = detectPhotoTarget(message.body);
+        const storedImages = Array.isArray(state.pendingAction.data.images)
+          ? (state.pendingAction.data.images as StoredImage[])
+          : [];
+
+        if (choice === 'banner' || choice === 'gallery') {
+          try {
+            response = await applyPhotoSelection(existingShop.id, choice, storedImages);
+          } catch (error) {
+            console.error('Photo selection execution failed:', error);
+            response = 'I could not apply that photo update. Please send the image again.';
+          }
+
+          state = {
+            ...state,
+            mode: 'active',
+            pendingAction: undefined,
+            shopId: existingShop.id,
+            lastMessageAt: new Date().toISOString(),
+          };
+
+          await setState(message.from, state);
+          await addMessage(message.from, 'agent', response);
+          return response;
+        }
+
+        if (isNegative(message.body)) {
+          state = {
+            ...state,
+            mode: 'active',
+            pendingAction: undefined,
+            lastMessageAt: new Date().toISOString(),
+          };
+          response = 'No problem, I cancelled the photo update. Send another image any time.';
+
+          await setState(message.from, state);
+          await addMessage(message.from, 'agent', response);
+          return response;
+        }
+
+        response = 'Please say "banner" to set your main photo, or "gallery" to add it to your gallery.';
+        state = {
+          ...state,
+          mode: 'awaiting_confirmation',
+          shopId: existingShop.id,
+          lastMessageAt: new Date().toISOString(),
+        };
+
+        await setState(message.from, state);
+        await addMessage(message.from, 'agent', response);
+        return response;
+      }
+
       if (isAffirmative(message.body)) {
         try {
           const executed = await executePendingAction(existingShop, state);
@@ -277,6 +439,16 @@ export async function processMessage(message: InboundMessage): Promise<string> {
         mode: 'active',
         pendingAction: undefined,
       };
+    }
+
+    const mediaHandled = await handleMediaForKnownShop(existingShop, state, message);
+    if (mediaHandled) {
+      state = mediaHandled.state;
+      response = mediaHandled.response;
+
+      await setState(message.from, state);
+      await addMessage(message.from, 'agent', response);
+      return response;
     }
 
     const history = await getHistory(message.from);
