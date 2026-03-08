@@ -19,23 +19,26 @@ Owners update their public business page by sending SMS or WhatsApp messages to 
 src/
   index.ts              Fastify entry point, loads .env
   routes/
-    webhook.ts          Twilio webhook route skeleton
+    webhook.ts          Twilio inbound message webhook handlers
     health.ts           GET /health endpoint
   services/
-    messaging.ts        Twilio messaging abstraction (stub)
-    agent.ts            Agent pipeline placeholder
+    messaging.ts        Twilio SMS + WhatsApp send abstraction
+    agent.ts            Agent placeholder (echo response)
     siteBuilder.ts      Site build placeholder
   models/
-    types.ts            Shared TypeScript types
+    types.ts            Shared TypeScript types/interfaces
   agent/
     prompts.ts          Prompt template placeholders
     intents.ts          Intent schema placeholders
   templates/
     base.html           Base HTML template
 prisma/
-  schema.prisma         Prisma schema placeholder
+  schema.prisma         Database schema
+  seed.ts               Seed data script
 docker-compose.yml      PostgreSQL 16 + Redis 7
 .env.example            Environment variable template
+scripts/
+  test-webhook.ts       Simulated Twilio SMS webhook test
 ```
 
 ## Prerequisites
@@ -64,7 +67,14 @@ cp .env.example .env
 docker compose up -d
 ```
 
-4. Start the development server:
+4. Run migrations and seed:
+
+```bash
+npm run prisma:migrate
+npm run prisma:seed
+```
+
+5. Start the development server:
 
 ```bash
 npm run dev
@@ -79,6 +89,9 @@ The API runs on `http://localhost:3000` by default.
 - `npm run start` - Run compiled server from `dist/`
 - `npm run lint` - Lint TypeScript files with ESLint
 - `npm run test` - Placeholder test script
+- `npm run prisma:migrate` - Run Prisma migrations
+- `npm run prisma:seed` - Seed database
+- `npm run test:webhook` - Send a simulated Twilio SMS webhook
 
 ## Health Check
 
@@ -95,7 +108,49 @@ Expected response:
 }
 ```
 
+## Webhook Testing (Local)
+
+Use test mode for local webhook simulation:
+
+```bash
+SKIP_TWILIO_VALIDATION=true SKIP_TWILIO_SEND=true npm run dev
+```
+
+In another terminal:
+
+```bash
+npm run test:webhook
+```
+
+## Twilio + ngrok Setup
+
+1. Start your server:
+
+```bash
+npm run dev
+```
+
+2. Start ngrok:
+
+```bash
+ngrok http 3000
+```
+
+3. In Twilio Console, configure webhook URLs:
+
+- SMS webhook: `https://<your-ngrok-domain>/api/webhook/sms`
+- WhatsApp webhook: `https://<your-ngrok-domain>/api/webhook/whatsapp`
+
+4. Set your real Twilio credentials/numbers in `.env` and keep:
+
+```bash
+SKIP_TWILIO_VALIDATION=false
+SKIP_TWILIO_SEND=false
+```
+
 ## Notes
 
-This repository currently contains project scaffolding only.
-Business logic will be implemented step by step from the implementation guide.
+Current message handling is intentionally minimal for Step 3:
+- Inbound messages are normalized into a unified `InboundMessage`
+- Placeholder agent replies with `Got your message: {body}`
+- Outbound response is sent on the same channel

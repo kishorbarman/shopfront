@@ -1,5 +1,5 @@
-export async function processMessage(input: unknown): Promise<string> {
-  // Placeholder implementation for Step 1 scaffolding.
-  void input;
-  return Promise.resolve('Agent pipeline not implemented yet.');
+import type { InboundMessage } from '../models/types';
+
+export async function processMessage(message: InboundMessage): Promise<string> {
+  return `Got your message: ${message.body}`;
 }

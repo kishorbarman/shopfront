@@ -1,3 +1,4 @@
+import formbody from '@fastify/formbody';
 import dotenv from 'dotenv';
 import Fastify from 'fastify';
 
@@ -11,6 +12,7 @@ const app = Fastify({
 });
 
 async function buildServer() {
+  await app.register(formbody);
   await app.register(healthRoutes);
   await app.register(webhookRoutes);
 
