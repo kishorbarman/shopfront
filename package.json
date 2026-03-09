@@ -13,7 +13,9 @@
     "prisma:seed": "prisma db seed",
     "test:webhook": "tsx scripts/test-webhook.ts",
     "test:full-loop": "tsx scripts/test-full-loop.ts",
-    "replay:failed": "tsx scripts/replay-failed.ts"
+    "replay:failed": "tsx scripts/replay-failed.ts",
+    "test:personal": "tsx scripts/test-personal-phone.ts",
+    "website:dev": "python3 -m http.server 9091 --bind 127.0.0.1 --directory website"
   },
   "keywords": [],
   "author": "",

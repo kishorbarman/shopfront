@@ -545,3 +545,73 @@ Verification completed (March 9, 2026):
   - `tests/failedMessageQueue.test.ts`
 - Confirmed production config fails fast without `SENTRY_DSN`:
   - one-off `loadConfig` check returned `sentry_validation_ok`
+
+### Step 13 - Marketing Website + Twilio Compliance Pages (Completed)
+
+Implemented:
+- Created standalone marketing site in separate subfolder:
+  - `website/`
+  - Designed as static, Firebase-ready, and extensible
+- Added main product landing page:
+  - `website/index.html`
+  - Modern visual design, gradient/ambient background, responsive sections, CTA, support positioning
+- Added shared styling and interactivity:
+  - `website/styles.css`
+  - `website/script.js`
+  - Reveal animations, counters, CTA "Coming soon" toast
+  - Header hide-on-scroll-down / show-on-scroll-up behavior
+- Added and iterated branded logo assets:
+  - `website/assets/shopfront-logo.svg`
+  - `website/assets/shopfront-icon.svg`
+  - Updated logo sizing and tagline text to improve clarity on mobile/desktop
+- Added legal/support pages:
+  - `website/privacy.html`
+  - `website/terms.html`
+  - `website/contact.html`
+- Updated navigation/footer links:
+  - Added Privacy, Terms, and Contact links from main page
+
+Twilio compliance-focused legal updates:
+- Privacy Policy includes:
+  - Data collected (phone number + message content)
+  - Purpose-limited usage for website updates
+  - No retention of message content after processing
+  - No third-party marketing/promotional sharing
+  - Messaging control instructions (`STOP`, `START`, `HELP`)
+  - Children’s privacy clause
+  - Global availability statement
+  - Contact email: `contact@shopfront.page`
+  - Effective date: March 1, 2026
+- Terms & Conditions includes:
+  - Program name and program description
+  - Message frequency disclosure
+  - Message/data rates disclosure
+  - Support contact info
+  - Bold opt-out/help instructions (`STOP`, `HELP`, `START`)
+  - Carrier liability statement
+  - Effective date: March 1, 2026
+- Contact page updated with support email:
+  - `contact@shopfront.page`
+
+Firebase hosting and deployment:
+- Added Firebase config in site folder:
+  - `website/firebase.json`
+- Added site-specific README:
+  - `website/README.md`
+- Deployed to Firebase project `shopfront-page`
+- Live URL:
+  - `https://shopfront-page.web.app`
+
+Additional helper tooling:
+- Added local personal-number webhook simulation script:
+  - `scripts/test-personal-phone.ts`
+  - Uses `+14156871788` default `from` for simulation
+- Added local website dev server script in `package.json`:
+  - `website:dev`
+
+Verification completed (March 9, 2026):
+- Local server verification for website pages (`index`, `privacy`, `terms`, `contact`)
+- CTA interaction verified (shows "Coming soon")
+- Mobile responsiveness improved for readability and tap targets
+- Header scroll behavior verified and tuned for slow + fast scroll
+- Firebase deploy completed successfully and pages verified live

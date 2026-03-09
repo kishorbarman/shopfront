@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ShopFront | Your Website, Managed by Text</title>
+    <meta
+      name="description"
+      content="ShopFront helps small businesses launch and update beautiful websites by text message."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&family=Space+Grotesk:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="icon" type="image/svg+xml" href="./assets/shopfront-icon.svg" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="ambient-bg" aria-hidden="true">
+      <span class="blob blob-a"></span>
+      <span class="blob blob-b"></span>
+      <span class="blob blob-c"></span>
+      <span class="grid-overlay"></span>
+    </div>
+
+    <header class="site-header shell">
+      <a href="./index.html" class="brand" aria-label="ShopFront home"><img src="./assets/shopfront-logo.svg" alt="ShopFront" class="brand-logo" /></a>
+      <nav>
+        <a href="#how-it-works">How it works</a>
+        <a href="#support">Support</a>
+        <a href="./privacy.html">Privacy</a>
+        <a href="./terms.html">Terms</a>
+        <a href="./contact.html">Contact</a>
+      </nav>
+      <a href="#cta" class="btn btn-sm">Start Your Page</a>
+    </header>
+
+    <main>
+      <section class="hero shell reveal">
+        <p class="eyebrow">Text-to-Website Platform for Small Business</p>
+        <h1>Your business website, managed by text.</h1>
+        <p class="lead">
+          Launch in minutes. Update prices, hours, notices, and photos without touching a dashboard.
+        </p>
+        <div class="hero-actions">
+          <a href="#cta" class="btn">Launch with ShopFront</a>
+          <a href="#how-it-works" class="btn btn-ghost">See How It Works</a>
+        </div>
+
+        <div class="hero-panel reveal">
+          <div class="panel-head">
+            <span>Live Operator Feed</span>
+            <span class="status-dot">Publishing</span>
+          </div>
+          <div class="chat-row">
+            <p class="from-user">"Change haircut to $30"</p>
+            <p class="from-ai">Updated. Your website is live with the new price.</p>
+          </div>
+          <div class="stats-grid">
+            <div>
+              <strong data-count="3">0</strong>
+              <span>Minutes to launch</span>
+            </div>
+            <div>
+              <strong data-count="20">0</strong>
+              <span>Seconds typical update</span>
+            </div>
+            <div>
+              <strong data-count="0">0</strong>
+              <span>Dashboard training needed</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="value shell reveal">
+        <article>
+          <h3>Go live fast</h3>
+          <p>Onboard through guided messages and publish a clean, mobile-ready page in one flow.</p>
+        </article>
+        <article>
+          <h3>Update naturally</h3>
+          <p>Text normal requests like "open till 8 Friday" or "add lineup for $10".</p>
+        </article>
+        <article>
+          <h3>Stay accurate</h3>
+          <p>Each mutation confirms first, applies safely, then rebuilds your public page in seconds.</p>
+        </article>
+      </section>
+
+      <section id="how-it-works" class="how shell reveal">
+        <div class="section-title">
+          <p class="eyebrow">How It Works</p>
+          <h2>Simple workflow, powerful automation</h2>
+        </div>
+        <div class="steps">
+          <article>
+            <span>01</span>
+            <h4>Text your business details</h4>
+            <p>Business name, category, services, hours, and address.</p>
+          </article>
+          <article>
+            <span>02</span>
+            <h4>Confirm what ShopFront parsed</h4>
+            <p>ShopFront asks for confirmation before applying important changes.</p>
+          </article>
+          <article>
+            <span>03</span>
+            <h4>Your site updates automatically</h4>
+            <p>Website rebuilds and customers instantly see current information.</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="support" class="support shell reveal">
+        <div>
+          <p class="eyebrow">Support Promise</p>
+          <h2>Always-on support</h2>
+          <p>
+            If something breaks, text support directly. Always-on AI handles first response and troubleshooting,
+            then quickly loops in a human specialist when confidence is low or the issue is complex.
+          </p>
+        </div>
+        <ul>
+          <li>Immediate AI triage and guided fixes</li>
+          <li>Automatic context handoff to human support</li>
+          <li>No repeating the same issue details</li>
+        </ul>
+      </section>
+
+      <section id="cta" class="cta shell reveal">
+        <h2>Ready to run your website by text?</h2>
+        <p>Launch your business page and keep it accurate every day without extra software overhead.</p>
+        <a href="#" class="btn" id="early-access-btn">Request Early Access</a>
+      </section>
+    </main>
+
+    <footer class="site-footer shell">
+      <p>© <span id="year"></span> ShopFront</p>
+      <div>
+        <a href="./privacy.html">Privacy Policy</a>
+        <a href="./terms.html">Terms & Conditions</a>
+        <a href="./contact.html">Contact</a>
+      </div>
+    </footer>
+
+    <div id="toast" class="toast" role="status" aria-live="polite">Coming soon</div>
+
+    <script src="./script.js"></script>
+  </body>
+</html>

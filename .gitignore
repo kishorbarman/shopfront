@@ -8,3 +8,5 @@ npm-debug.log*
 
 public/sites
 public/uploads
+
+website/.firebase/
