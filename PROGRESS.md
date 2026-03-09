@@ -493,5 +493,5 @@ Verification completed (March 8, 2026):
 
 Remaining external verification (requires user-managed infra/accounts):
 - CI/CD runtime execution on GitHub push to `main`
-- Production URL health check (`https://shopfront.page/health`)
+- Production URL health check (`https://shopfront-production-2dc5.up.railway.app/health`)
 - Twilio production webhook wiring and live message flow verification

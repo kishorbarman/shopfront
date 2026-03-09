@@ -83,7 +83,7 @@ test('full onboarding happy path creates shop, services, and hours', async () =>
 
   const r7 = await processMessage(inbound(phone, '742 Evergreen Terrace, Springfield'));
   assert.match(r7, /Your page is live!/i);
-  assert.match(r7, /shopfront.page\/tonys-barbershop(?:-\d+)?/i);
+  assert.match(r7, /tonys-barbershop(?:-\d+)?/i);
 
   const shop = await prisma.shop.findUnique({
     where: { phone },

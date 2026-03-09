@@ -7,7 +7,7 @@ This guide deploys Shopfront to Railway with managed PostgreSQL + Redis, custom 
 - Railway account
 - GitHub repo connected (`main` branch)
 - Twilio account with SMS/WhatsApp senders configured
-- Domain name (for example `shopfront.page`)
+- Domain name (for example `shopfront-production-2dc5.up.railway.app`)
 
 ## 2. Create Railway Project
 
@@ -32,7 +32,7 @@ Set these in the Railway `shopfront` service:
 - `TWILIO_SMS_NUMBER`
 - `TWILIO_WHATSAPP_NUMBER`
 - `ANTHROPIC_API_KEY`
-- `BASE_URL=https://shopfront.page`
+- `BASE_URL=https://shopfront-production-2dc5.up.railway.app`
 - `SKIP_TWILIO_VALIDATION=false`
 - `SKIP_TWILIO_SEND=false`
 - `MOCK_ANTHROPIC=false`
@@ -53,21 +53,21 @@ npm run prisma:seed
 
 ## 5. Custom Domain + SSL
 
-1. In Railway, open the `shopfront` service settings, add custom domain `shopfront.page` (or your chosen domain).
+1. In Railway, open the `shopfront` service settings, add custom domain `shopfront-production-2dc5.up.railway.app` (or your chosen domain).
 2. Add DNS records requested by Railway (usually CNAME/ALIAS).
 3. Wait for certificate issuance (Railway provisions SSL automatically).
 4. Confirm:
 
 ```bash
-curl -i https://shopfront.page/health
+curl -i https://shopfront-production-2dc5.up.railway.app/health
 ```
 
 ## 6. Twilio Webhook Configuration
 
 In Twilio Console:
 
-- SMS webhook URL: `https://shopfront.page/api/webhook/sms`
-- WhatsApp webhook URL: `https://shopfront.page/api/webhook/whatsapp`
+- SMS webhook URL: `https://shopfront-production-2dc5.up.railway.app/api/webhook/sms`
+- WhatsApp webhook URL: `https://shopfront-production-2dc5.up.railway.app/api/webhook/whatsapp`
 - HTTP method: `POST`
 
 Then send a test message and confirm logs/events in Railway.

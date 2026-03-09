@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 
+import config from '../config';
 import { prisma } from '../lib/prisma';
 import { rebuildSite } from '../services/siteBuilder';
 import type { InboundMessage } from '../models/types';
@@ -306,7 +307,7 @@ export async function runOnboarding(
     await rebuildSite(shopId);
 
     return {
-      response: `Your page is live! shopfront.page/${slug} - You can update anything anytime, just text me.`,
+      response: `Your page is live! ${config.BASE_URL.replace(/\/$/, '')}/${slug} - You can update anything anytime, just text me.`,
       state: {
         ...state,
         mode: 'active',
