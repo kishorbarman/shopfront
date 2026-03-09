@@ -1,6 +1,7 @@
 import Redis from 'ioredis';
 
 import config from '../config';
+import logger from './logger';
 
 const globalForRedis = globalThis as unknown as {
   redis?: Redis;
@@ -13,11 +14,19 @@ function createRedisClient(): Redis {
   });
 
   client.on('error', (error) => {
-    console.error('Redis connection error:', error);
+    logger.error(
+      {
+        event: 'error',
+        type: 'RedisConnectionError',
+        message: error.message,
+        stack: error.stack,
+      },
+      'Redis connection error',
+    );
   });
 
   client.on('connect', () => {
-    console.log('Redis connected');
+    logger.info({ event: 'redis_connected' }, 'Redis connected');
   });
 
   return client;

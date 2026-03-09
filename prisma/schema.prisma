@@ -78,3 +78,21 @@ enum NoticeType {
   WARNING
   CLOSURE
 }
+
+model FailedMessage {
+  id           String   @id @default(uuid())
+  twilioSid    String?
+  phone        String
+  channel      String
+  payload      Json
+  errorType    String
+  errorMessage String
+  errorStack   String?
+  retries      Int      @default(3)
+  createdAt    DateTime @default(now())
+  processedAt  DateTime?
+
+  @@index([phone])
+  @@index([createdAt])
+  @@index([processedAt])
+}

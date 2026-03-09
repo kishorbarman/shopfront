@@ -3,7 +3,18 @@ import twilio from 'twilio';
 
 import type { Channel, InboundMessage } from '../models/types';
 import config from '../config';
+import {
+  AgentParseError,
+  AgentConfidenceError,
+  DatabaseError,
+  MessagingError,
+  RateLimitError,
+  ValidationError,
+} from '../lib/errors';
+import logger from '../lib/logger';
+import { reportError } from '../lib/observability';
 import { processMessage } from '../services/agent';
+import { enqueueFailedMessage } from '../services/failedMessageQueue';
 import { sendMessage } from '../services/messaging';
 
 type TwilioWebhookBody = {
@@ -14,6 +25,8 @@ type TwilioWebhookBody = {
   NumMedia?: string;
   [key: string]: string | undefined;
 };
+
+const PROCESS_RETRY_LIMIT = 3;
 
 function normalizePhoneNumber(phone: string): string {
   return phone.replace(/^whatsapp:/, '').trim();
@@ -91,25 +104,149 @@ function emptyTwimlResponse(reply: FastifyReply): void {
   reply.code(200).type('text/xml').send(response.toString());
 }
 
+function fallbackForError(error: unknown): string {
+  if (error instanceof RateLimitError) {
+    return "You're sending a lot of messages! Give me a minute to catch up.";
+  }
+
+  if (error instanceof AgentParseError || error instanceof AgentConfidenceError || error instanceof ValidationError) {
+    return "I didn't quite catch that. Are you trying to update your services, hours, or something else?";
+  }
+
+  if (error instanceof DatabaseError) {
+    return "Something went wrong on my end. Your change didn't go through - try again in a minute?";
+  }
+
+  if (error instanceof MessagingError) {
+    return "Sorry, I'm having a moment. Try sending that again?";
+  }
+
+  return "Something unexpected happened. Text me again and I'll try my best.";
+}
+
+async function processWithRetries(message: InboundMessage): Promise<string> {
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= PROCESS_RETRY_LIMIT; attempt += 1) {
+    try {
+      return await processMessage(message);
+    } catch (error) {
+      lastError = error;
+      const typedError = error instanceof Error ? error : new Error(String(error));
+      logger.error(
+        {
+          event: 'error',
+          type: typedError.name,
+          phone: message.from,
+          messageId: message.id,
+          attempt,
+          message: typedError.message,
+          stack: typedError.stack,
+        },
+        'Message processing attempt failed',
+      );
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
+}
+
 async function handleInbound(
   request: FastifyRequest<{ Body: TwilioWebhookBody }>,
   reply: FastifyReply,
   channel: Channel,
 ): Promise<void> {
   if (!validateTwilioSignature(request)) {
+    logger.warn(
+      {
+        event: 'error',
+        type: 'TwilioSignatureValidationError',
+        channel,
+        path: request.url,
+      },
+      'Twilio signature validation failed',
+    );
     reply.code(403).send({ error: 'Invalid Twilio signature' });
     return;
   }
 
   const message = parseInboundMessage(request.body ?? {}, channel);
-  console.log('Inbound message', message);
 
-  const responseText = await processMessage(message);
-  await sendMessage({
-    to: message.from,
-    body: responseText,
-    channel: message.channel,
-  });
+  logger.info(
+    {
+      event: 'message_received',
+      phone: message.from,
+      channel: message.channel,
+      bodyLength: message.body.length,
+      hasMedia: message.mediaUrls.length > 0,
+    },
+    'Inbound message received',
+  );
+
+  let responseText: string;
+  try {
+    responseText = await processWithRetries(message);
+  } catch (error) {
+    responseText = fallbackForError(error);
+
+    await enqueueFailedMessage(message, error, PROCESS_RETRY_LIMIT);
+
+    const typedError = error instanceof Error ? error : new Error(String(error));
+    reportError(typedError, {
+      tags: {
+        channel: message.channel,
+        shopId: 'unknown',
+        intent: 'unknown',
+      },
+      extra: {
+        phone: message.from,
+        twilioSid: message.id,
+      },
+    });
+
+    logger.error(
+      {
+        event: 'error',
+        type: typedError.name,
+        phone: message.from,
+        messageId: message.id,
+        message: typedError.message,
+        stack: typedError.stack,
+      },
+      'Message processing failed after retries; saved to dead letter queue',
+    );
+  }
+
+  try {
+    await sendMessage({
+      to: message.from,
+      body: responseText,
+      channel: message.channel,
+    });
+  } catch (error) {
+    const typedError = error instanceof Error ? error : new Error(String(error));
+    reportError(typedError, {
+      tags: {
+        channel: message.channel,
+      },
+      extra: {
+        phone: message.from,
+        twilioSid: message.id,
+      },
+    });
+
+    logger.error(
+      {
+        event: 'error',
+        type: typedError.name,
+        phone: message.from,
+        messageId: message.id,
+        message: typedError.message,
+        stack: typedError.stack,
+      },
+      'Failed to send reply message',
+    );
+  }
 
   emptyTwimlResponse(reply);
 }

@@ -1,6 +1,8 @@
 import { Prisma } from '@prisma/client';
 
 import { prisma } from '../lib/prisma';
+import { DatabaseError, ValidationError } from '../lib/errors';
+import logger from '../lib/logger';
 import { rebuildSite } from './siteBuilder';
 
 type ServiceUpdates = {
@@ -24,7 +26,7 @@ type NoticeInput = {
 
 function assertNonEmpty(value: string, field: string): void {
   if (!value || !value.trim()) {
-    throw new Error(`${field} is required.`);
+    throw new ValidationError(`${field} is required.`);
   }
 }
 
@@ -54,11 +56,32 @@ function levenshtein(a: string, b: string): number {
   return dp[m][n];
 }
 
+function wrapDatabaseError(error: unknown): DatabaseError {
+  const typedError = error instanceof Error ? error : new Error(String(error));
+  return new DatabaseError(typedError.message);
+}
+
+function logMutation(shopId: string, intent: string, success: boolean): void {
+  logger.info(
+    {
+      event: 'shop_updated',
+      shopId,
+      intent,
+      success,
+    },
+    success ? 'Shop mutation succeeded' : 'Shop mutation failed',
+  );
+}
+
 async function touchShop(shopId: string): Promise<void> {
-  await prisma.shop.update({
-    where: { id: shopId },
-    data: { updatedAt: new Date() },
-  });
+  try {
+    await prisma.shop.update({
+      where: { id: shopId },
+      data: { updatedAt: new Date() },
+    });
+  } catch (error) {
+    throw wrapDatabaseError(error);
+  }
 }
 
 async function touchAndRebuild(shopId: string): Promise<void> {
@@ -69,9 +92,14 @@ async function touchAndRebuild(shopId: string): Promise<void> {
 async function findServiceByFuzzyName(shopId: string, serviceName: string) {
   assertNonEmpty(serviceName, 'serviceName');
 
-  const services = await prisma.service.findMany({
-    where: { shopId, isActive: true },
-  });
+  let services;
+  try {
+    services = await prisma.service.findMany({
+      where: { shopId, isActive: true },
+    });
+  } catch (error) {
+    throw wrapDatabaseError(error);
+  }
 
   if (services.length === 0) {
     return null;
@@ -113,108 +141,138 @@ export async function addService(
 ) {
   assertNonEmpty(input.name, 'name');
   if (!Number.isFinite(input.price) || input.price <= 0) {
-    throw new Error('price must be a positive number.');
+    throw new ValidationError('price must be a positive number.');
   }
 
-  const maxSort = await prisma.service.aggregate({
-    where: { shopId },
-    _max: { sortOrder: true },
-  });
+  try {
+    const maxSort = await prisma.service.aggregate({
+      where: { shopId },
+      _max: { sortOrder: true },
+    });
 
-  const created = await prisma.service.create({
-    data: {
-      shopId,
-      name: input.name.trim(),
-      price: new Prisma.Decimal(input.price),
-      description: input.description?.trim() || null,
-      sortOrder: (maxSort._max.sortOrder ?? 0) + 1,
-      isActive: true,
-    },
-  });
+    const created = await prisma.service.create({
+      data: {
+        shopId,
+        name: input.name.trim(),
+        price: new Prisma.Decimal(input.price),
+        description: input.description?.trim() || null,
+        sortOrder: (maxSort._max.sortOrder ?? 0) + 1,
+        isActive: true,
+      },
+    });
 
-  await touchAndRebuild(shopId);
-  return created;
+    await touchAndRebuild(shopId);
+    logMutation(shopId, 'add_service', true);
+    return created;
+  } catch (error) {
+    logMutation(shopId, 'add_service', false);
+    if (error instanceof ValidationError || error instanceof DatabaseError) {
+      throw error;
+    }
+    throw wrapDatabaseError(error);
+  }
 }
 
 export async function updateService(shopId: string, serviceName: string, updates: ServiceUpdates) {
   const service = await findServiceByFuzzyName(shopId, serviceName);
   if (!service) {
-    throw new Error(`Service not found: ${serviceName}`);
+    throw new ValidationError(`Service not found: ${serviceName}`);
   }
 
   if (updates.newPrice !== undefined && (!Number.isFinite(updates.newPrice) || updates.newPrice <= 0)) {
-    throw new Error('newPrice must be a positive number.');
+    throw new ValidationError('newPrice must be a positive number.');
   }
 
   if (updates.newName !== undefined) {
     assertNonEmpty(updates.newName, 'newName');
   }
 
-  const updated = await prisma.service.update({
-    where: { id: service.id },
-    data: {
-      name: updates.newName?.trim() ?? undefined,
-      price: updates.newPrice !== undefined ? new Prisma.Decimal(updates.newPrice) : undefined,
-    },
-  });
+  try {
+    const updated = await prisma.service.update({
+      where: { id: service.id },
+      data: {
+        name: updates.newName?.trim() ?? undefined,
+        price: updates.newPrice !== undefined ? new Prisma.Decimal(updates.newPrice) : undefined,
+      },
+    });
 
-  await touchAndRebuild(shopId);
-  return updated;
+    await touchAndRebuild(shopId);
+    logMutation(shopId, 'update_service', true);
+    return updated;
+  } catch (error) {
+    logMutation(shopId, 'update_service', false);
+    throw wrapDatabaseError(error);
+  }
 }
 
 export async function removeService(shopId: string, serviceName: string) {
   const service = await findServiceByFuzzyName(shopId, serviceName);
   if (!service) {
-    throw new Error(`Service not found: ${serviceName}`);
+    throw new ValidationError(`Service not found: ${serviceName}`);
   }
 
-  const updated = await prisma.service.update({
-    where: { id: service.id },
-    data: { isActive: false },
-  });
+  try {
+    const updated = await prisma.service.update({
+      where: { id: service.id },
+      data: { isActive: false },
+    });
 
-  await touchAndRebuild(shopId);
-  return updated;
+    await touchAndRebuild(shopId);
+    logMutation(shopId, 'remove_service', true);
+    return updated;
+  } catch (error) {
+    logMutation(shopId, 'remove_service', false);
+    throw wrapDatabaseError(error);
+  }
 }
 
 export async function updateHours(shopId: string, changes: HourChange[]) {
   if (!Array.isArray(changes) || changes.length === 0) {
-    throw new Error('changes must include at least one hour update.');
+    throw new ValidationError('changes must include at least one hour update.');
   }
 
   const updates = [] as Array<Awaited<ReturnType<typeof prisma.hour.upsert>>>;
 
-  for (const change of changes) {
-    if (!Number.isInteger(change.dayOfWeek) || change.dayOfWeek < 0 || change.dayOfWeek > 6) {
-      throw new Error(`Invalid dayOfWeek: ${change.dayOfWeek}`);
-    }
+  try {
+    for (const change of changes) {
+      if (!Number.isInteger(change.dayOfWeek) || change.dayOfWeek < 0 || change.dayOfWeek > 6) {
+        throw new ValidationError(`Invalid dayOfWeek: ${change.dayOfWeek}`);
+      }
 
-    const record = await prisma.hour.upsert({
-      where: {
-        shopId_dayOfWeek: {
+      const record = await prisma.hour.upsert({
+        where: {
+          shopId_dayOfWeek: {
+            shopId,
+            dayOfWeek: change.dayOfWeek,
+          },
+        },
+        update: {
+          openTime: change.openTime,
+          closeTime: change.closeTime,
+          isClosed: change.isClosed,
+        },
+        create: {
           shopId,
           dayOfWeek: change.dayOfWeek,
+          openTime: change.openTime ?? '09:00',
+          closeTime: change.closeTime ?? '17:00',
+          isClosed: change.isClosed ?? false,
         },
-      },
-      update: {
-        openTime: change.openTime,
-        closeTime: change.closeTime,
-        isClosed: change.isClosed,
-      },
-      create: {
-        shopId,
-        dayOfWeek: change.dayOfWeek,
-        openTime: change.openTime ?? '09:00',
-        closeTime: change.closeTime ?? '17:00',
-        isClosed: change.isClosed ?? false,
-      },
-    });
+      });
 
-    updates.push(record);
+      updates.push(record);
+    }
+
+    await touchAndRebuild(shopId);
+    logMutation(shopId, 'update_hours', true);
+    return updates;
+  } catch (error) {
+    logMutation(shopId, 'update_hours', false);
+    if (error instanceof ValidationError) {
+      throw error;
+    }
+    throw wrapDatabaseError(error);
   }
-
-  await touchAndRebuild(shopId);
-  return updates;
 }
 
 function toNoticeType(type: NoticeInput['type']): 'INFO' | 'WARNING' | 'CLOSURE' {
@@ -228,70 +286,91 @@ export async function addNotice(shopId: string, input: NoticeInput) {
 
   const startsAt = new Date(input.startsAt);
   if (Number.isNaN(startsAt.getTime())) {
-    throw new Error('startsAt must be a valid ISO datetime.');
+    throw new ValidationError('startsAt must be a valid ISO datetime.');
   }
 
   let expiresAt: Date | null = null;
   if (input.expiresAt) {
     const parsed = new Date(input.expiresAt);
     if (Number.isNaN(parsed.getTime())) {
-      throw new Error('expiresAt must be a valid ISO datetime.');
+      throw new ValidationError('expiresAt must be a valid ISO datetime.');
     }
     expiresAt = parsed;
   }
 
-  const notice = await prisma.notice.create({
-    data: {
-      shopId,
-      message: input.message.trim(),
-      type: toNoticeType(input.type),
-      startsAt,
-      expiresAt,
-    },
-  });
+  try {
+    const notice = await prisma.notice.create({
+      data: {
+        shopId,
+        message: input.message.trim(),
+        type: toNoticeType(input.type),
+        startsAt,
+        expiresAt,
+      },
+    });
 
-  await touchAndRebuild(shopId);
-  return notice;
+    await touchAndRebuild(shopId);
+    logMutation(shopId, 'add_notice', true);
+    return notice;
+  } catch (error) {
+    logMutation(shopId, 'add_notice', false);
+    throw wrapDatabaseError(error);
+  }
 }
 
 export async function removeNotice(shopId: string, noticeId: string) {
   assertNonEmpty(noticeId, 'noticeId');
 
-  const existing = await prisma.notice.findFirst({
-    where: {
-      id: noticeId,
-      shopId,
-    },
-  });
+  try {
+    const existing = await prisma.notice.findFirst({
+      where: {
+        id: noticeId,
+        shopId,
+      },
+    });
 
-  if (!existing) {
-    throw new Error(`Notice not found: ${noticeId}`);
+    if (!existing) {
+      throw new ValidationError(`Notice not found: ${noticeId}`);
+    }
+
+    const deleted = await prisma.notice.delete({
+      where: { id: noticeId },
+    });
+
+    await touchAndRebuild(shopId);
+    logMutation(shopId, 'remove_notice', true);
+    return deleted;
+  } catch (error) {
+    logMutation(shopId, 'remove_notice', false);
+    if (error instanceof ValidationError) {
+      throw error;
+    }
+    throw wrapDatabaseError(error);
   }
-
-  const deleted = await prisma.notice.delete({
-    where: { id: noticeId },
-  });
-
-  await touchAndRebuild(shopId);
-  return deleted;
 }
 
 export async function updateContact(shopId: string, field: 'phone' | 'address', value: string) {
   assertNonEmpty(value, 'value');
 
-  const updated = await prisma.shop.update({
-    where: { id: shopId },
-    data: {
-      ...(field === 'phone' ? { phone: value.trim() } : { address: value.trim() }),
-    },
-  });
+  try {
+    const updated = await prisma.shop.update({
+      where: { id: shopId },
+      data: {
+        ...(field === 'phone' ? { phone: value.trim() } : { address: value.trim() }),
+      },
+    });
 
-  await touchShop(shopId);
-  if (field === 'address') {
-    await rebuildSite(shopId);
+    await touchShop(shopId);
+    if (field === 'address') {
+      await rebuildSite(shopId);
+    }
+
+    logMutation(shopId, 'update_contact', true);
+    return updated;
+  } catch (error) {
+    logMutation(shopId, 'update_contact', false);
+    throw wrapDatabaseError(error);
   }
-
-  return updated;
 }
 
 export async function findActiveService(shopId: string, serviceName: string) {

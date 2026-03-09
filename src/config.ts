@@ -14,6 +14,7 @@ type AppConfig = {
   TWILIO_SMS_NUMBER: string;
   TWILIO_WHATSAPP_NUMBER: string;
   ANTHROPIC_API_KEY: string;
+  SENTRY_DSN: string;
   BASE_URL: string;
   SKIP_TWILIO_VALIDATION: boolean;
   SKIP_TWILIO_SEND: boolean;
@@ -63,11 +64,16 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     TWILIO_SMS_NUMBER: requiredString('TWILIO_SMS_NUMBER', env, errors),
     TWILIO_WHATSAPP_NUMBER: requiredString('TWILIO_WHATSAPP_NUMBER', env, errors),
     ANTHROPIC_API_KEY: requiredString('ANTHROPIC_API_KEY', env, errors),
+    SENTRY_DSN: env.SENTRY_DSN?.trim() ?? '',
     BASE_URL: requiredString('BASE_URL', env, errors),
     SKIP_TWILIO_VALIDATION: parseBoolean('SKIP_TWILIO_VALIDATION', env),
     SKIP_TWILIO_SEND: parseBoolean('SKIP_TWILIO_SEND', env),
     MOCK_ANTHROPIC: parseBoolean('MOCK_ANTHROPIC', env),
   };
+
+  if (config.NODE_ENV === 'production' && !config.SENTRY_DSN) {
+    errors.push('Missing required environment variable in production: SENTRY_DSN');
+  }
 
   if (errors.length > 0) {
     throw new Error(`Environment validation failed:\n- ${errors.join('\n- ')}`);

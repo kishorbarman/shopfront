@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 
 import config from '../config';
+import logger from '../lib/logger';
 
 const EXTRACTION_SYSTEM_PROMPT =
   "You are a data extraction assistant. Extract structured data from the user's message. Respond ONLY with valid JSON.";
@@ -77,7 +78,8 @@ async function extractWithClaude<T>(prompt: string): Promise<T | null> {
     const text = extractTextContent(response.content);
     return tryParseJson<T>(text);
   } catch (error) {
-    console.error('Claude parsing failed:', error);
+    const typedError = error instanceof Error ? error : new Error(String(error));
+    logger.error({ event: 'error', type: typedError.name, message: typedError.message, stack: typedError.stack }, 'Claude parsing failed');
     return null;
   }
 }

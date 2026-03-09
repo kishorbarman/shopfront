@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 
 import { parseHours } from './parsers';
 import config from '../config';
+import logger from '../lib/logger';
 
 export type MutationIntent =
   | 'add_service'
@@ -473,7 +474,8 @@ async function extractWithSonnet(intent: MutationIntent, message: string, contex
 
     return parsedTool.input;
   } catch (error) {
-    console.error('Sonnet entity extraction failed:', error);
+    const typedError = error instanceof Error ? error : new Error(String(error));
+    logger.error({ event: 'error', type: typedError.name, message: typedError.message, stack: typedError.stack }, 'Sonnet entity extraction failed');
     return null;
   }
 }

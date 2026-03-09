@@ -12,7 +12,8 @@
     "prisma:migrate": "prisma migrate dev --name init",
     "prisma:seed": "prisma db seed",
     "test:webhook": "tsx scripts/test-webhook.ts",
-    "test:full-loop": "tsx scripts/test-full-loop.ts"
+    "test:full-loop": "tsx scripts/test-full-loop.ts",
+    "replay:failed": "tsx scripts/replay-failed.ts"
   },
   "keywords": [],
   "author": "",
@@ -25,9 +26,11 @@
     "@fastify/helmet": "^13.0.2",
     "@fastify/static": "^9.0.0",
     "@prisma/client": "^6.16.2",
+    "@sentry/node": "^10.42.0",
     "dotenv": "^17.3.1",
     "fastify": "^5.8.2",
     "ioredis": "^5.10.0",
+    "pino": "^10.3.1",
     "prisma": "^6.16.2",
     "sharp": "^0.34.5",
     "twilio": "^5.12.2"

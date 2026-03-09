@@ -6,12 +6,16 @@ import Fastify from 'fastify';
 import path from 'node:path';
 
 import config from './config';
+import logger from './lib/logger';
+import { reportError, initSentry } from './lib/observability';
 import { prisma } from './lib/prisma';
 import { redis } from './lib/redis';
 import healthRoutes from './routes/health';
 import metricsRoutes from './routes/metrics';
 import pagesRoutes from './routes/pages';
 import webhookRoutes from './routes/webhook';
+
+initSentry();
 
 export async function buildServer() {
   let requestCount = 0;
@@ -26,6 +30,46 @@ export async function buildServer() {
 
   app.addHook('onRequest', async () => {
     requestCount += 1;
+  });
+
+  app.addHook('onRequest', async (request) => {
+    logger.debug(
+      {
+        event: 'request_received',
+        method: request.method,
+        url: request.url,
+      },
+      'HTTP request received',
+    );
+  });
+
+  app.setErrorHandler((error, request, reply) => {
+    const typedError = error instanceof Error ? error : new Error(String(error));
+    reportError(typedError, {
+      tags: {
+        route: request.url,
+        method: request.method,
+      },
+      extra: {
+        requestId: request.id,
+      },
+    });
+
+    app.log.error(
+      {
+        event: 'error',
+        type: typedError.name,
+        route: request.url,
+        method: request.method,
+        message: typedError.message,
+        stack: typedError.stack,
+      },
+      'Unhandled request error',
+    );
+
+    if (!reply.sent) {
+      reply.code(500).send({ error: 'Internal Server Error' });
+    }
   });
 
   await app.register(cors, {

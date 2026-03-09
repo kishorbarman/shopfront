@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 
 import { type ClassificationResult, SUPPORTED_INTENTS } from './intents';
 import config from '../config';
+import logger from '../lib/logger';
 
 interface ClassifierOptions {
   hasMedia?: boolean;
@@ -228,7 +229,8 @@ export async function classifyIntent(
 
     return parsed;
   } catch (error) {
-    console.error('Intent classification failed:', error);
+    const typedError = error instanceof Error ? error : new Error(String(error));
+    logger.error({ event: 'error', type: typedError.name, message: typedError.message, stack: typedError.stack }, 'Intent classification failed');
     return heuristic;
   }
 }

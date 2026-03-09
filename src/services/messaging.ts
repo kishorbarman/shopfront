@@ -2,6 +2,8 @@ import twilio from 'twilio';
 
 import type { Channel } from '../models/types';
 import config from '../config';
+import { MessagingError } from '../lib/errors';
+import logger from '../lib/logger';
 
 export interface OutboundMessage {
   to: string;
@@ -24,7 +26,7 @@ function getTwilioClient() {
   const authToken = config.TWILIO_AUTH_TOKEN;
 
   if (!accountSid || !authToken) {
-    throw new Error('TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN must be set.');
+    throw new MessagingError('TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN must be set.');
   }
 
   return twilio(accountSid, authToken);
@@ -36,45 +38,73 @@ function getFromNumber(channel: Channel): string {
 
   if (channel === 'whatsapp') {
     if (!whatsappNumber) {
-      throw new Error('TWILIO_WHATSAPP_NUMBER must be set for WhatsApp messaging.');
+      throw new MessagingError('TWILIO_WHATSAPP_NUMBER must be set for WhatsApp messaging.');
     }
     return channelPhoneNumber(whatsappNumber, channel);
   }
 
   if (!smsNumber) {
-    throw new Error('TWILIO_SMS_NUMBER must be set for SMS messaging.');
+    throw new MessagingError('TWILIO_SMS_NUMBER must be set for SMS messaging.');
   }
 
   return channelPhoneNumber(smsNumber, channel);
 }
 
 export async function sendMessage(message: OutboundMessage): Promise<string> {
-  if (config.SKIP_TWILIO_SEND) {
-    const mockSid = `MOCK_${Date.now()}`;
-    console.log('Outbound message (skipped Twilio send)', {
-      id: mockSid,
-      to: message.to,
-      channel: message.channel,
-      hasMedia: Boolean(message.mediaUrl),
+  try {
+    if (config.SKIP_TWILIO_SEND) {
+      const mockSid = `MOCK_${Date.now()}`;
+      logger.info(
+        {
+          event: 'message_sent',
+          id: mockSid,
+          phone: message.to,
+          channel: message.channel,
+          bodyLength: message.body.length,
+          hasMedia: Boolean(message.mediaUrl),
+          skipped: true,
+        },
+        'Outbound message send skipped',
+      );
+      return mockSid;
+    }
+
+    const client = getTwilioClient();
+
+    const response = await client.messages.create({
+      to: channelPhoneNumber(message.to, message.channel),
+      from: getFromNumber(message.channel),
+      body: message.body,
+      mediaUrl: message.mediaUrl ? [message.mediaUrl] : undefined,
     });
-    return mockSid;
+
+    logger.info(
+      {
+        event: 'message_sent',
+        id: response.sid,
+        phone: message.to,
+        channel: message.channel,
+        bodyLength: message.body.length,
+        hasMedia: Boolean(message.mediaUrl),
+      },
+      'Outbound message sent',
+    );
+
+    return response.sid;
+  } catch (error) {
+    const typedError = error instanceof Error ? error : new Error(String(error));
+    logger.error(
+      {
+        event: 'error',
+        type: 'MessagingError',
+        message: typedError.message,
+        stack: typedError.stack,
+      },
+      'Failed to send outbound message',
+    );
+
+    throw typedError instanceof MessagingError
+      ? typedError
+      : new MessagingError(`Twilio send failed: ${typedError.message}`);
   }
-
-  const client = getTwilioClient();
-
-  const response = await client.messages.create({
-    to: channelPhoneNumber(message.to, message.channel),
-    from: getFromNumber(message.channel),
-    body: message.body,
-    mediaUrl: message.mediaUrl ? [message.mediaUrl] : undefined,
-  });
-
-  console.log('Outbound message', {
-    id: response.sid,
-    to: message.to,
-    channel: message.channel,
-    hasMedia: Boolean(message.mediaUrl),
-  });
-
-  return response.sid;
 }

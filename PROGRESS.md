@@ -495,3 +495,53 @@ Remaining external verification (requires user-managed infra/accounts):
 - CI/CD runtime execution on GitHub push to `main`
 - Production URL health check (`https://shopfront-production-2dc5.up.railway.app/health`)
 - Twilio production webhook wiring and live message flow verification
+
+### Step 12 - Error Handling, Logging & Monitoring (Completed)
+
+Implemented:
+- Added custom error classes:
+  - `src/lib/errors.ts`
+  - `AgentParseError`, `AgentConfidenceError`, `DatabaseError`, `MessagingError`, `RateLimitError`, `ValidationError`
+- Added structured logging with `pino`:
+  - `src/lib/logger.ts`
+  - Instrumented key events:
+    - `message_received`
+    - `intent_classified`
+    - `shop_updated`
+    - `message_sent`
+    - `error`
+- Added Sentry integration:
+  - `src/lib/observability.ts`
+  - Initializes Sentry at server startup in `src/index.ts`
+  - Reports pipeline and webhook errors with tags/context (`shopId`, `intent`, `channel`, phone, Twilio SID)
+- Added graceful fallback messaging in webhook processing:
+  - `src/routes/webhook.ts`
+  - LLM/parse/db/rate-limit/messaging/unknown errors now return friendly responses (no silent failures)
+- Added dead letter queue support:
+  - Prisma model: `FailedMessage` in `prisma/schema.prisma`
+  - Migration: `prisma/migrations/20260309004139_add_failed_messages/`
+  - Queue service: `src/services/failedMessageQueue.ts`
+  - Webhook retries processing up to 3 times, then stores failed payload/error in DB
+- Added failed message replay script:
+  - `scripts/replay-failed.ts`
+  - NPM script: `replay:failed`
+- Updated environment config:
+  - Added `SENTRY_DSN` to `.env.example`
+  - `src/config.ts` validates `SENTRY_DSN` in production (fail-fast)
+- Additional hardening and instrumentation updates:
+  - `src/services/agent.ts` error context logging/reporting + propagated typed errors
+  - `src/services/messaging.ts` wraps send failures as `MessagingError`
+  - `src/services/shopUpdater.ts` wraps validation/DB failures and emits mutation logs
+  - `src/agent/classifier.ts`, `src/agent/parsers.ts`, `src/agent/extractors.ts` switched parser/extractor error logging to structured logger
+  - `src/lib/redis.ts` logs Redis connection errors via structured logger
+
+Verification completed (March 9, 2026):
+- `npx prisma migrate dev --name add_failed_messages` passed
+- `npx prisma generate` passed
+- `npm run lint` passed
+- `npm run build` passed
+- `npm run test` passed (`36/36`)
+- Added and passed DLQ unit test:
+  - `tests/failedMessageQueue.test.ts`
+- Confirmed production config fails fast without `SENTRY_DSN`:
+  - one-off `loadConfig` check returned `sentry_validation_ok`
