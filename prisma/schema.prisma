@@ -23,6 +23,7 @@ model Shop {
   services  Service[]
   hours     Hour[]
   notices   Notice[]
+  channelIdentities ChannelIdentity[]
 }
 
 enum ShopStatus {
@@ -95,4 +96,21 @@ model FailedMessage {
   @@index([phone])
   @@index([createdAt])
   @@index([processedAt])
+}
+
+
+model ChannelIdentity {
+  id             String   @id @default(uuid())
+  shopId          String
+  shop            Shop     @relation(fields: [shopId], references: [id])
+  channel         String
+  phone           String?
+  externalUserId  String?
+  externalSpaceId String?
+  createdAt       DateTime @default(now())
+
+  @@index([channel, phone])
+  @@index([channel, externalUserId])
+  @@unique([channel, phone])
+  @@unique([channel, externalUserId])
 }

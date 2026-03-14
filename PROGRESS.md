@@ -615,3 +615,27 @@ Verification completed (March 9, 2026):
 - Mobile responsiveness improved for readability and tap targets
 - Header scroll behavior verified and tuned for slow + fast scroll
 - Firebase deploy completed successfully and pages verified live
+
+### Step 14 - Google Chat Channel Foundations (In Progress)
+
+Implemented:
+- Extended messaging domain model to support an additional channel:
+  - `src/models/types.ts`
+  - Added `google_chat` to `Channel`
+  - Extended inbound message shape with external channel metadata (`externalUserId`, `externalSpaceId`, `rawPayload`)
+- Added identity mapping persistence for multi-channel users:
+  - `prisma/schema.prisma`
+  - New `ChannelIdentity` model with channel+phone and channel+externalUserId indexes/uniqueness
+  - Migration created and applied:
+    - `prisma/migrations/20260314212001_add_channel_identity/`
+  - Added helper service:
+    - `src/services/channelIdentity.ts`
+- Refactored messaging service to adapter pattern while preserving `sendMessage(msg)` API:
+  - `src/services/messaging.ts`
+  - `sms` and `whatsapp` route to Twilio adapter
+  - `google_chat` routes to placeholder adapter that throws a clear not-implemented error
+  - Added structured send logs including channel and recipient
+
+Verification completed (March 14, 2026):
+- `npm run build` passed
+- `npm run test` passed (`36/36`)
