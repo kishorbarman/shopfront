@@ -615,3 +615,32 @@ Verification completed (March 9, 2026):
 - Mobile responsiveness improved for readability and tap targets
 - Header scroll behavior verified and tuned for slow + fast scroll
 - Firebase deploy completed successfully and pages verified live
+
+### Step 14 - WhatsApp Production Validation + Publish Fixes (Completed)
+
+Implemented:
+- Fixed production site rebuild path to support read-only container filesystems:
+  - `src/config.ts`
+  - `src/services/siteBuilder.ts`
+  - Added configurable `SITE_OUTPUT_DIR` (production default uses writable runtime path)
+- Hardened onboarding completion to be idempotent by phone number:
+  - `src/agent/onboarding.ts`
+  - Existing shop for a phone is updated instead of duplicate create
+  - Services/hours are replaced on completion to keep state consistent
+- Updated onboarding live-page message format to include `/s/{slug}` path
+  - `src/agent/onboarding.ts`
+
+Production verification completed (March 14-15, 2026):
+- Railway health endpoint is healthy:
+  - `GET /health` => `200`
+- Twilio webhook security is enforced:
+  - invalid signature => `403 Invalid Twilio signature`
+- Signed WhatsApp webhook processing succeeds:
+  - inbound webhook => `200` TwiML response
+  - outbound Twilio message SID logged
+- Real WhatsApp onboarding messages were processed through onboarding steps
+- Live generated page is accessible in production:
+  - `https://shopfront-production-2dc5.up.railway.app/s/your-shop-2` => `200` with full HTML
+
+Notes:
+- For Railway production, `SITE_OUTPUT_DIR` should be set to a writable path (recommended: `/tmp/sites`).
