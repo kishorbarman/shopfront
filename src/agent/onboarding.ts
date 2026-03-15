@@ -108,19 +108,38 @@ function ensureCompleteDraft(draft: OnboardingDraft): {
 
 async function completeOnboarding(phone: string, draft: OnboardingDraft): Promise<CompletedOnboarding> {
   const completeDraft = ensureCompleteDraft(draft);
-  const slug = await generateUniqueSlug(completeDraft.name);
 
   return prisma.$transaction(async (tx) => {
-    const shop = await tx.shop.create({
-      data: {
-        name: completeDraft.name,
-        slug,
-        category: completeDraft.category,
-        phone,
-        address: completeDraft.address,
-        status: 'ACTIVE',
-      },
+    const existingShop = await tx.shop.findUnique({
+      where: { phone },
+      select: { id: true, slug: true },
     });
+
+    const slug = existingShop?.slug ?? (await generateUniqueSlug(completeDraft.name));
+
+    const shop = existingShop
+      ? await tx.shop.update({
+          where: { id: existingShop.id },
+          data: {
+            name: completeDraft.name,
+            category: completeDraft.category,
+            address: completeDraft.address,
+            status: 'ACTIVE',
+          },
+        })
+      : await tx.shop.create({
+          data: {
+            name: completeDraft.name,
+            slug,
+            category: completeDraft.category,
+            phone,
+            address: completeDraft.address,
+            status: 'ACTIVE',
+          },
+        });
+
+    await tx.service.deleteMany({ where: { shopId: shop.id } });
+    await tx.hour.deleteMany({ where: { shopId: shop.id } });
 
     await tx.service.createMany({
       data: completeDraft.services.map((service, index) => ({
@@ -142,7 +161,7 @@ async function completeOnboarding(phone: string, draft: OnboardingDraft): Promis
       })),
     });
 
-    return { shopId: shop.id, slug };
+    return { shopId: shop.id, slug: shop.slug };
   });
 }
 
@@ -307,7 +326,7 @@ export async function runOnboarding(
     await rebuildSite(shopId);
 
     return {
-      response: `Your page is live! ${config.BASE_URL.replace(/\/$/, '')}/${slug} - You can update anything anytime, just text me.`,
+      response: `Your page is live! ${config.BASE_URL.replace(/\/$/, '')}/s/${slug} - You can update anything anytime, just text me.`,
       state: {
         ...state,
         mode: 'active',

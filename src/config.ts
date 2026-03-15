@@ -16,6 +16,7 @@ type AppConfig = {
   ANTHROPIC_API_KEY: string;
   SENTRY_DSN: string;
   BASE_URL: string;
+  SITE_OUTPUT_DIR: string;
   SKIP_TWILIO_VALIDATION: boolean;
   SKIP_TWILIO_SEND: boolean;
   MOCK_ANTHROPIC: boolean;
@@ -45,6 +46,15 @@ function parseBoolean(name: string, env: NodeJS.ProcessEnv): boolean {
   return raw === '1' || raw === 'true' || raw === 'yes';
 }
 
+function resolveSiteOutputDir(env: NodeJS.ProcessEnv, nodeEnv: NodeEnv): string {
+  const configured = env.SITE_OUTPUT_DIR?.trim();
+  if (configured) {
+    return configured;
+  }
+
+  return nodeEnv === 'production' ? '/tmp/sites' : 'public/sites';
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const errors: string[] = [];
 
@@ -66,6 +76,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     ANTHROPIC_API_KEY: requiredString('ANTHROPIC_API_KEY', env, errors),
     SENTRY_DSN: env.SENTRY_DSN?.trim() ?? '',
     BASE_URL: requiredString('BASE_URL', env, errors),
+    SITE_OUTPUT_DIR: resolveSiteOutputDir(env, NODE_ENV),
     SKIP_TWILIO_VALIDATION: parseBoolean('SKIP_TWILIO_VALIDATION', env),
     SKIP_TWILIO_SEND: parseBoolean('SKIP_TWILIO_SEND', env),
     MOCK_ANTHROPIC: parseBoolean('MOCK_ANTHROPIC', env),

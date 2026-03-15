@@ -1,11 +1,22 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 
+import config from '../config';
+import logger from '../lib/logger';
 import { prisma } from '../lib/prisma';
 import { generateShopPage } from '../templates/generator';
 
+function resolveSiteBaseDir(): string {
+  const configured = config.SITE_OUTPUT_DIR;
+  if (path.isAbsolute(configured)) {
+    return configured;
+  }
+
+  return path.join(process.cwd(), configured);
+}
+
 export function getSiteOutputPath(slug: string): string {
-  return path.join(process.cwd(), 'public', 'sites', slug, 'index.html');
+  return path.join(resolveSiteBaseDir(), slug, 'index.html');
 }
 
 export async function rebuildSite(shopId: string): Promise<void> {
@@ -38,5 +49,13 @@ export async function rebuildSite(shopId: string): Promise<void> {
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
   await fs.writeFile(outputPath, html, 'utf8');
 
-  console.log(`Rebuilt site for ${shop.name} at /s/${shop.slug}`);
+  logger.info(
+    {
+      event: 'site_rebuilt',
+      shopId,
+      slug: shop.slug,
+      outputPath,
+    },
+    `Rebuilt site for ${shop.name} at /s/${shop.slug}`,
+  );
 }
