@@ -62,6 +62,10 @@ function isAffirmative(text: string): boolean {
   return /^(yes|yeah|yep|correct|looks good|right|ok|okay|do it|sure)\b/i.test(text.trim());
 }
 
+function isDoneSignal(text: string): boolean {
+  return /^(done|done for now|finish|finished|thats it|that's it|skip for now)\b/i.test(text.trim());
+}
+
 function formatServicesForConfirmation(services: OnboardingService[]): string {
   const lines = services.map((service) => `- ${service.name} - $${service.price}`);
   return [`Here's what I've got:`, ...lines, 'Look right?'].join('\n');
@@ -96,6 +100,29 @@ async function generateUniqueSlug(name: string): Promise<string> {
     candidate = `${base}-${suffix}`;
     suffix += 1;
   }
+}
+
+function buildPlaceholderHours(): OnboardingHour[] {
+  return Array.from({ length: 7 }, (_, dayOfWeek) => ({
+    dayOfWeek,
+    open: '09:00',
+    close: '17:00',
+    isClosed: true,
+  }));
+}
+
+function withPlaceholders(draft: OnboardingDraft): OnboardingDraft {
+  if (!draft.name) {
+    throw new Error('Business name is required before finishing onboarding.');
+  }
+
+  return {
+    name: draft.name,
+    category: draft.category ?? 'general',
+    services: draft.services ?? [{ name: 'Services coming soon', price: 0 }],
+    hours: draft.hours ?? buildPlaceholderHours(),
+    address: draft.address ?? 'Address coming soon',
+  };
 }
 
 function ensureCompleteDraft(draft: OnboardingDraft): {
@@ -173,6 +200,39 @@ async function completeOnboarding(phone: string, draft: OnboardingDraft): Promis
   });
 }
 
+async function finalizeOnboardingWithCurrentDraft(
+  message: InboundMessage,
+  state: ConversationState,
+  draft: OnboardingDraft,
+): Promise<OnboardingResult> {
+  if (!draft.name) {
+    return {
+      response: "Before we finish, what's your business called?",
+      state: withDraft(state, draft),
+    };
+  }
+
+  const completedDraft = withPlaceholders(draft);
+  const { shopId, slug } = await completeOnboarding(message.from, completedDraft);
+  await rebuildSite(shopId);
+
+  const publicBaseUrl = resolvePublicBaseUrl(config.BASE_URL);
+
+  return {
+    response:
+      `Your starter page is live! ${publicBaseUrl}/s/${slug} - ` +
+      'I used placeholders for anything missing. Text me anytime to add or update services, hours, and address.',
+    state: {
+      ...state,
+      mode: 'active',
+      onboardingStep: undefined,
+      pendingAction: undefined,
+      shopId,
+      lastMessageAt: new Date().toISOString(),
+    },
+  };
+}
+
 export async function runOnboarding(
   message: InboundMessage,
   state: ConversationState,
@@ -193,6 +253,11 @@ export async function runOnboarding(
         draft,
       ),
     };
+  }
+
+  // Early finish: after business name is captured (step >= 2), "done" publishes a starter page.
+  if (step >= 2 && isDoneSignal(message.body)) {
+    return finalizeOnboardingWithCurrentDraft(message, state, draft);
   }
 
   if (step === 1) {

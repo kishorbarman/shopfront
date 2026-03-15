@@ -106,3 +106,63 @@ test('full onboarding happy path creates shop, services, and hours', async () =>
 
   await clearShopDataByPhone(phone);
 });
+
+test('onboarding can finish early with Done after business name and create placeholders', async () => {
+  const phone = buildPhone();
+
+  await processMessage(inbound(phone, 'Hi'));
+  await processMessage(inbound(phone, 'Luna Studio'));
+
+  const done = await processMessage(inbound(phone, 'Done'));
+  assert.match(done, /starter page is live!/i);
+  assert.match(done, /used placeholders/i);
+
+  const shop = await prisma.shop.findUniqueOrThrow({
+    where: { phone },
+    include: {
+      services: true,
+      hours: true,
+    },
+  });
+
+  assert.equal(shop.name, 'Luna Studio');
+  assert.equal(shop.category, 'general');
+  assert.equal(shop.status, 'ACTIVE');
+  assert.equal(shop.address, 'Address coming soon');
+
+  assert.equal(shop.services.length, 1);
+  assert.equal(shop.services[0]?.name, 'Services coming soon');
+  assert.equal(shop.services[0]?.price.toString(), '0');
+
+  assert.equal(shop.hours.length, 7);
+  assert.ok(shop.hours.every((hour) => hour.isClosed));
+
+  await clearShopDataByPhone(phone);
+});
+
+test('onboarding Done preserves provided details and fills only missing fields', async () => {
+  const phone = buildPhone();
+
+  await processMessage(inbound(phone, 'Hi'));
+  await processMessage(inbound(phone, 'Nova Nails'));
+  await processMessage(inbound(phone, 'Salon'));
+  await processMessage(inbound(phone, 'Manicure 30, Pedicure 45'));
+
+  const done = await processMessage(inbound(phone, 'Done'));
+  assert.match(done, /starter page is live!/i);
+
+  const shop = await prisma.shop.findUniqueOrThrow({
+    where: { phone },
+    include: {
+      services: true,
+      hours: true,
+    },
+  });
+
+  assert.equal(shop.category, 'salon');
+  assert.equal(shop.services.length, 2);
+  assert.equal(shop.address, 'Address coming soon');
+  assert.equal(shop.hours.length, 7);
+
+  await clearShopDataByPhone(phone);
+});
