@@ -16,6 +16,7 @@ import { reportError } from '../lib/observability';
 import { processMessage } from '../services/agent';
 import { getState, type ConversationState } from '../services/conversationState';
 import { writeMessageLog } from '../services/messageLog';
+import { summarizeMessageAction } from '../services/messageSummary';
 import { enqueueFailedMessage } from '../services/failedMessageQueue';
 import { sendMessage } from '../services/messaging';
 import { rebuildSite } from '../services/siteBuilder';
@@ -114,14 +115,6 @@ function isAffirmative(text: string): boolean {
 
 function pickIntent(beforeState: ConversationState | null, afterState: ConversationState | null): string | undefined {
   return afterState?.pendingAction?.intent ?? beforeState?.pendingAction?.intent ?? undefined;
-}
-
-function pickSummary(beforeState: ConversationState | null, afterState: ConversationState | null): string | undefined {
-  return (
-    afterState?.pendingAction?.confirmationMessage ??
-    beforeState?.pendingAction?.confirmationMessage ??
-    undefined
-  );
 }
 
 function didApplyMutation(
@@ -256,7 +249,15 @@ async function handleInbound(
 
   const afterState = await getState(message.from);
   const parsedIntent = pickIntent(beforeState, afterState);
-  const parsedSummary = pickSummary(beforeState, afterState);
+  const updateApplied = !processingError && didApplyMutation(message.body, beforeState, afterState);
+  const status = processingError ? 'FAILED' : 'PROCESSED';
+  const parsedSummary = summarizeMessageAction({
+    messageBody: message.body,
+    beforeState,
+    afterState,
+    updateApplied,
+    status,
+  });
 
   await writeMessageLog({
     twilioSid: message.id,
@@ -266,8 +267,8 @@ async function handleInbound(
     inboundText: message.body || '(empty)',
     parsedIntent,
     parsedSummary,
-    updateApplied: !processingError && didApplyMutation(message.body, beforeState, afterState),
-    status: processingError ? 'FAILED' : 'PROCESSED',
+    updateApplied,
+    status,
     errorMessage: processingError?.message,
     responseText,
   });
