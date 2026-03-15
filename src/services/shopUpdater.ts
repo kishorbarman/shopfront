@@ -239,6 +239,13 @@ export async function updateHours(shopId: string, changes: HourChange[]) {
         throw new ValidationError(`Invalid dayOfWeek: ${change.dayOfWeek}`);
       }
 
+      const inferredIsClosed =
+        change.isClosed !== undefined
+          ? change.isClosed
+          : change.openTime || change.closeTime
+            ? false
+            : undefined;
+
       const record = await prisma.hour.upsert({
         where: {
           shopId_dayOfWeek: {
@@ -249,14 +256,14 @@ export async function updateHours(shopId: string, changes: HourChange[]) {
         update: {
           openTime: change.openTime,
           closeTime: change.closeTime,
-          isClosed: change.isClosed,
+          isClosed: inferredIsClosed,
         },
         create: {
           shopId,
           dayOfWeek: change.dayOfWeek,
           openTime: change.openTime ?? '09:00',
           closeTime: change.closeTime ?? '17:00',
-          isClosed: change.isClosed ?? false,
+          isClosed: inferredIsClosed ?? false,
         },
       });
 
