@@ -171,6 +171,41 @@
       padding: 16px 6px 0;
       font-size: 13px;
     }
+
+    .logs-list { display: grid; gap: 10px; }
+    .log-item {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px;
+      background: #fff;
+    }
+    .log-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+    .log-head strong { font-size: 13px; color: var(--muted); }
+    .log-outcome {
+      font-size: 12px;
+      border-radius: 999px;
+      padding: 4px 8px;
+      font-weight: 700;
+      border: 1px solid var(--line);
+      background: #f3f5f7;
+      color: var(--muted);
+    }
+    .log-updated { color: #0b4b3a; background: #e5f4ef; border-color: #b8e0d2; }
+    .log-failed { color: #8b1f18; background: #fdebea; border-color: #f2c7c5; }
+    .log-neutral { color: #444f5c; background: #eef2f6; border-color: #d7dfe7; }
+    .log-line {
+      margin: 6px 0 0;
+      font-size: 14px;
+      color: var(--text);
+      overflow-wrap: anywhere;
+    }
+    .log-line span { color: var(--muted); font-weight: 700; }
     .empty { margin: 0; color: var(--muted); }
     @media (min-width: 720px) {
       .page { padding: 0 20px 34px; }
@@ -213,7 +248,7 @@
 
     <section class="section" aria-label="Hours">
       <h2>Hours</h2>
-      <table class="hours-table"><tbody><tr class="">
+      <table class="hours-table"><tbody><tr class="today">
         <th>Sunday</th>
         <td class="closed">Closed</td>
       </tr><tr class="">
@@ -231,7 +266,7 @@
       </tr><tr class="">
         <th>Friday</th>
         <td class="">09:00 - 19:00</td>
-      </tr><tr class="today">
+      </tr><tr class="">
         <th>Saturday</th>
         <td class="">09:00 - 19:00</td>
       </tr></tbody></table>
@@ -250,6 +285,8 @@
         <a class="button" href="sms:+15557654321">Text +15557654321</a>
       </div>
     </section>
+
+    <section class="section" aria-label="Logs"><h2>Logs</h2><p class="empty">No message history yet.</p></section>
 
     <footer class="footer">Powered by Shopfront</footer>
   </main>
