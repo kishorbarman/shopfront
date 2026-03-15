@@ -31,6 +31,14 @@ interface OnboardingResult {
 const WELCOME_MESSAGE =
   "Hey! I'm Shopfront - I'll get your page live in a few minutes. What's your business called?";
 
+function resolvePublicBaseUrl(baseUrl: string): string {
+  const trimmed = baseUrl.trim().replace(/\/$/, '');
+  if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(trimmed)) {
+    return 'https://my.shopfront.page';
+  }
+  return trimmed;
+}
+
 function getDraft(state: ConversationState): OnboardingDraft {
   if (state.pendingAction?.intent !== 'onboarding_draft') {
     return {};
@@ -325,8 +333,10 @@ export async function runOnboarding(
     const { shopId, slug } = await completeOnboarding(message.from, updatedDraft);
     await rebuildSite(shopId);
 
+    const publicBaseUrl = resolvePublicBaseUrl(config.BASE_URL);
+
     return {
-      response: `Your page is live! ${config.BASE_URL.replace(/\/$/, '')}/s/${slug} - You can update anything anytime, just text me.`,
+      response: `Your page is live! ${publicBaseUrl}/s/${slug} - You can update anything anytime, just text me.`,
       state: {
         ...state,
         mode: 'active',
