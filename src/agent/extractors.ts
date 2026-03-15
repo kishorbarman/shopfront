@@ -447,26 +447,40 @@ export async function extractMutationEntities(
 
   let data: Record<string, any> | null = sonnetData;
 
-  if (!data) {
+  const fallbackHeuristic = async (): Promise<Record<string, any> | null> => {
     if (intent === 'add_service') {
-      data = parseAddServiceHeuristic(message);
-    } else if (intent === 'update_service') {
-      data = parseUpdateServiceHeuristic(message, context.services);
-    } else if (intent === 'remove_service') {
-      data = parseRemoveServiceHeuristic(message, context.services);
-    } else if (intent === 'update_hours') {
-      data = await parseUpdateHoursHeuristic(message);
-    } else if (intent === 'temp_closure') {
-      data = parseTempClosureHeuristic(message);
-    } else if (intent === 'update_contact') {
-      data = parseUpdateContactHeuristic(message);
-    } else if (intent === 'add_notice') {
-      data = parseAddNoticeHeuristic(message);
-    } else if (intent === 'remove_notice') {
-      data = parseRemoveNoticeHeuristic(message, context.notices);
-    } else if (intent === 'update_photo') {
-      data = parseUpdatePhotoHeuristic(context.hasMedia);
+      return parseAddServiceHeuristic(message);
     }
+    if (intent === 'update_service') {
+      return parseUpdateServiceHeuristic(message, context.services);
+    }
+    if (intent === 'remove_service') {
+      return parseRemoveServiceHeuristic(message, context.services);
+    }
+    if (intent === 'update_hours') {
+      return parseUpdateHoursHeuristic(message);
+    }
+    if (intent === 'temp_closure') {
+      return parseTempClosureHeuristic(message);
+    }
+    if (intent === 'update_contact') {
+      return parseUpdateContactHeuristic(message);
+    }
+    if (intent === 'add_notice') {
+      return parseAddNoticeHeuristic(message);
+    }
+    if (intent === 'remove_notice') {
+      return parseRemoveNoticeHeuristic(message, context.notices);
+    }
+    if (intent === 'update_photo') {
+      return parseUpdatePhotoHeuristic(context.hasMedia);
+    }
+
+    return null;
+  };
+
+  if (!data) {
+    data = await fallbackHeuristic();
   }
 
   if (!data) {
@@ -488,12 +502,85 @@ export async function extractMutationEntities(
     }
   }
 
+  let normalized = validateExtractedData(intent, data);
+  if (!normalized) {
+    const heuristicData = await fallbackHeuristic();
+    if (heuristicData) {
+      normalized = validateExtractedData(intent, heuristicData);
+    }
+  }
+
+  if (!normalized) {
+    return {
+      success: false,
+      reason: 'invalid_extracted_data',
+      clarificationQuestion: 'I need a bit more detail to make that update. Can you rephrase it?',
+    };
+  }
+
   return {
     success: true,
     intent,
-    data,
-    confirmationMessage: buildConfirmation(intent, data),
+    data: normalized,
+    confirmationMessage: buildConfirmation(intent, normalized),
   };
+}
+
+function validateExtractedData(intent: MutationIntent, data: Record<string, any>): Record<string, any> | null {
+  switch (intent) {
+    case 'add_service':
+      if (typeof data.name !== 'string' || !data.name.trim()) return null;
+      if (typeof data.price !== 'number' || Number.isNaN(data.price) || data.price <= 0) return null;
+      return { ...data, name: data.name.trim(), price: Number(data.price) };
+    case 'update_service': {
+      if (typeof data.serviceName !== 'string' || !data.serviceName.trim()) return null;
+      const hasUpdate = data.newPrice !== undefined || data.newName !== undefined;
+      if (!hasUpdate) return null;
+      if (data.newPrice !== undefined && (Number.isNaN(Number(data.newPrice)) || Number(data.newPrice) <= 0)) return null;
+      if (data.newName !== undefined && (typeof data.newName !== 'string' || !data.newName.trim())) return null;
+      return {
+        ...data,
+        serviceName: data.serviceName.trim(),
+        newPrice: data.newPrice !== undefined ? Number(data.newPrice) : undefined,
+        newName: typeof data.newName === 'string' ? data.newName.trim() : undefined,
+      };
+    }
+    case 'remove_service':
+      if (typeof data.serviceName !== 'string' || !data.serviceName.trim()) return null;
+      return { ...data, serviceName: data.serviceName.trim() };
+    case 'update_hours':
+      if (!Array.isArray(data.changes) || data.changes.length === 0) return null;
+      return data;
+    case 'temp_closure':
+      if (typeof data.message !== 'string' || !data.message.trim()) return null;
+      if (typeof data.startsAt !== 'string' || !data.startsAt.trim()) return null;
+      if (typeof data.expiresAt !== 'string' || !data.expiresAt.trim()) return null;
+      return {
+        ...data,
+        message: data.message.trim(),
+        startsAt: data.startsAt.trim(),
+        expiresAt: data.expiresAt.trim(),
+      };
+    case 'update_contact':
+      if (data.field !== 'phone' && data.field !== 'address') return null;
+      if (typeof data.value !== 'string' || !data.value.trim()) return null;
+      return { ...data, value: data.value.trim() };
+    case 'add_notice':
+      if (typeof data.message !== 'string' || !data.message.trim()) return null;
+      return {
+        ...data,
+        message: data.message.trim(),
+        type: data.type === 'warning' ? 'warning' : 'info',
+      };
+    case 'remove_notice':
+      if (typeof data.noticeId !== 'string' || !data.noticeId.trim()) return null;
+      return { ...data, noticeId: data.noticeId.trim() };
+    case 'update_photo':
+      if (typeof data.useAsMain !== 'boolean') return null;
+      return data;
+    default:
+      return null;
+  }
 }
 
 function formatDay(day: number): string {

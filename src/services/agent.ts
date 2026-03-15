@@ -9,7 +9,7 @@ import {
 import type { IntentCategory } from '../agent/intents';
 import { runOnboarding } from '../agent/onboarding';
 import { routeMessage } from '../agent/router';
-import { AgentParseError, DatabaseError, RateLimitError } from '../lib/errors';
+import { AgentParseError, DatabaseError, RateLimitError, ValidationError } from '../lib/errors';
 import logger from '../lib/logger';
 import { reportError } from '../lib/observability';
 import { prisma } from '../lib/prisma';
@@ -419,13 +419,35 @@ export async function processMessage(message: InboundMessage): Promise<string> {
         }
 
         if (isAffirmative(message.body)) {
-          const executed = await executePendingAction(existingShop, state);
-          state = {
-            ...executed.state,
-            shopId: existingShop.id,
-            lastMessageAt: new Date().toISOString(),
-          };
-          response = executed.response;
+          try {
+            const executed = await executePendingAction(existingShop, state);
+            state = {
+              ...executed.state,
+              shopId: existingShop.id,
+              lastMessageAt: new Date().toISOString(),
+            };
+            response = executed.response;
+          } catch (error) {
+            const typedError = error instanceof Error ? error : new Error(String(error));
+
+            if (typedError instanceof ValidationError || typedError instanceof AgentParseError) {
+              // Prevent stale pending actions from trapping the user in a broken confirmation loop.
+              state = {
+                ...state,
+                mode: 'active',
+                pendingAction: undefined,
+                shopId: existingShop.id,
+                lastMessageAt: new Date().toISOString(),
+              };
+              response = "I couldn't apply that confirmation safely. Please restate the change in one message.";
+
+              await setState(message.from, state);
+              await addMessage(message.from, 'agent', response);
+              return response;
+            }
+
+            throw error;
+          }
 
           await setState(message.from, state);
           await addMessage(message.from, 'agent', response);
