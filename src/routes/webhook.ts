@@ -130,6 +130,16 @@ function didApplyMutation(
   return afterState?.mode === 'active' && !afterState.pendingAction;
 }
 
+function responseImpliesMutation(responseText: string): boolean {
+  const normalized = responseText.trim().toLowerCase();
+  return (
+    normalized.startsWith('done!') ||
+    normalized.startsWith('updated!') ||
+    normalized.startsWith('removed!') ||
+    normalized.startsWith('got it!')
+  );
+}
+
 function fallbackForError(error: unknown): string {
   if (error instanceof RateLimitError) {
     return "You're sending a lot of messages! Give me a minute to catch up.";
@@ -249,15 +259,18 @@ async function handleInbound(
 
   const afterState = await getState(message.from);
   const parsedIntent = pickIntent(beforeState, afterState);
-  const updateApplied = !processingError && didApplyMutation(message.body, beforeState, afterState);
   const status = processingError ? 'FAILED' : 'PROCESSED';
-  const parsedSummary = summarizeMessageAction({
-    messageBody: message.body,
-    beforeState,
-    afterState,
-    updateApplied,
-    status,
-  });
+  const updateApplied =
+    status === 'PROCESSED' &&
+    (didApplyMutation(message.body, beforeState, afterState) || responseImpliesMutation(responseText));
+  const parsedSummary =
+    summarizeMessageAction({
+      messageBody: message.body,
+      beforeState,
+      afterState,
+      updateApplied,
+      status,
+    }) ?? (updateApplied ? 'applied_change: ' + responseText : undefined);
 
   await writeMessageLog({
     twilioSid: message.id,
