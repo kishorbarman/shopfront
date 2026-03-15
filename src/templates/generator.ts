@@ -1,10 +1,11 @@
-import type { Hour, Notice, Service, Shop } from '@prisma/client';
+import type { Hour, MessageLog, Notice, Service, Shop } from '@prisma/client';
 import config from '../config';
 
 type ShopPageData = Shop & {
   services: Service[];
   hours: Hour[];
   notices: Notice[];
+  logs?: MessageLog[];
 };
 
 type TemplateKind = 'services' | 'menu';
@@ -154,6 +155,47 @@ function hoursMarkup(hours: Hour[]): string {
       </tr>`;
     })
     .join('')}</tbody></table>`;
+}
+
+
+
+function formatLogTimestamp(value: Date): string {
+  const iso = new Date(value).toISOString();
+  return `${iso.slice(0, 16).replace('T', ' ')} UTC`;
+}
+
+function trimForLog(value: string, limit = 180): string {
+  if (value.length <= limit) {
+    return value;
+  }
+  return `${value.slice(0, limit - 1)}...`;
+}
+
+function logsMarkup(logs: MessageLog[] | undefined): string {
+  const items = logs ?? [];
+  if (items.length === 0) {
+    return `<section class="section" aria-label="Logs"><h2>Logs</h2><p class="empty">No message history yet.</p></section>`;
+  }
+
+  const rows = items
+    .map((log) => {
+      const outcome = log.status === 'FAILED' ? 'Failed' : log.updateApplied ? 'Updated' : 'No update';
+      const parsed = log.parsedIntent ?? 'unknown';
+      const detail = log.parsedSummary ?? log.errorMessage ?? log.responseText ?? '';
+
+      return `<article class="log-item">
+        <div class="log-head">
+          <strong>${escapeHtml(formatLogTimestamp(log.createdAt))}</strong>
+          <span class="log-outcome ${log.status === 'FAILED' ? 'log-failed' : log.updateApplied ? 'log-updated' : 'log-neutral'}">${outcome}</span>
+        </div>
+        <p class="log-line"><span>Text:</span> ${escapeHtml(trimForLog(log.inboundText || '(empty)'))}</p>
+        <p class="log-line"><span>Parsed:</span> ${escapeHtml(parsed)}</p>
+        ${detail ? `<p class="log-line"><span>Detail:</span> ${escapeHtml(trimForLog(detail))}</p>` : ''}
+      </article>`;
+    })
+    .join('');
+
+  return `<section class="section" aria-label="Logs"><h2>Logs</h2><div class="logs-list">${rows}</div></section>`;
 }
 
 function shopUrl(shop: Shop): string {
@@ -369,6 +411,41 @@ export async function generateShopPage(shop: ShopPageData): Promise<string> {
       padding: 16px 6px 0;
       font-size: 13px;
     }
+
+    .logs-list { display: grid; gap: 10px; }
+    .log-item {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px;
+      background: #fff;
+    }
+    .log-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+    .log-head strong { font-size: 13px; color: var(--muted); }
+    .log-outcome {
+      font-size: 12px;
+      border-radius: 999px;
+      padding: 4px 8px;
+      font-weight: 700;
+      border: 1px solid var(--line);
+      background: #f3f5f7;
+      color: var(--muted);
+    }
+    .log-updated { color: #0b4b3a; background: #e5f4ef; border-color: #b8e0d2; }
+    .log-failed { color: #8b1f18; background: #fdebea; border-color: #f2c7c5; }
+    .log-neutral { color: #444f5c; background: #eef2f6; border-color: #d7dfe7; }
+    .log-line {
+      margin: 6px 0 0;
+      font-size: 14px;
+      color: var(--text);
+      overflow-wrap: anywhere;
+    }
+    .log-line span { color: var(--muted); font-weight: 700; }
     .empty { margin: 0; color: var(--muted); }
     @media (min-width: 720px) {
       .page { padding: 0 20px 34px; }
@@ -413,6 +490,8 @@ export async function generateShopPage(shop: ShopPageData): Promise<string> {
         <a class="button" href="sms:${escapeHtml(shop.phone)}">Text ${escapeHtml(shop.phone)}</a>
       </div>
     </section>
+
+    ${logsMarkup(shop.logs)}
 
     <footer class="footer">Powered by Shopfront</footer>
   </main>

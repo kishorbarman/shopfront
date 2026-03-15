@@ -14,8 +14,11 @@ import {
 import logger from '../lib/logger';
 import { reportError } from '../lib/observability';
 import { processMessage } from '../services/agent';
+import { getState, type ConversationState } from '../services/conversationState';
+import { writeMessageLog } from '../services/messageLog';
 import { enqueueFailedMessage } from '../services/failedMessageQueue';
 import { sendMessage } from '../services/messaging';
+import { rebuildSite } from '../services/siteBuilder';
 
 type TwilioWebhookBody = {
   MessageSid?: string;
@@ -104,6 +107,36 @@ function emptyTwimlResponse(reply: FastifyReply): void {
   reply.code(200).type('text/xml').send(response.toString());
 }
 
+
+function isAffirmative(text: string): boolean {
+  return /^(yes|yeah|yep|correct|looks good|right|ok|okay|do it|sure)\b/i.test(text.trim());
+}
+
+function pickIntent(beforeState: ConversationState | null, afterState: ConversationState | null): string | undefined {
+  return afterState?.pendingAction?.intent ?? beforeState?.pendingAction?.intent ?? undefined;
+}
+
+function pickSummary(beforeState: ConversationState | null, afterState: ConversationState | null): string | undefined {
+  return (
+    afterState?.pendingAction?.confirmationMessage ??
+    beforeState?.pendingAction?.confirmationMessage ??
+    undefined
+  );
+}
+
+function didApplyMutation(
+  messageBody: string,
+  beforeState: ConversationState | null,
+  afterState: ConversationState | null,
+): boolean {
+  const wasAwaiting = beforeState?.mode === 'awaiting_confirmation' && Boolean(beforeState.pendingAction);
+  if (!wasAwaiting || !isAffirmative(messageBody)) {
+    return false;
+  }
+
+  return afterState?.mode === 'active' && !afterState.pendingAction;
+}
+
 function fallbackForError(error: unknown): string {
   if (error instanceof RateLimitError) {
     return "You're sending a lot of messages! Give me a minute to catch up.";
@@ -183,16 +216,20 @@ async function handleInbound(
     'Inbound message received',
   );
 
+  const beforeState = await getState(message.from);
+
   let responseText: string;
+  let processingError: Error | null = null;
+
   try {
     responseText = await processWithRetries(message);
   } catch (error) {
+    processingError = error instanceof Error ? error : new Error(String(error));
     responseText = fallbackForError(error);
 
     await enqueueFailedMessage(message, error, PROCESS_RETRY_LIMIT);
 
-    const typedError = error instanceof Error ? error : new Error(String(error));
-    reportError(typedError, {
+    reportError(processingError, {
       tags: {
         channel: message.channel,
         shopId: 'unknown',
@@ -207,14 +244,54 @@ async function handleInbound(
     logger.error(
       {
         event: 'error',
-        type: typedError.name,
+        type: processingError.name,
         phone: message.from,
         messageId: message.id,
-        message: typedError.message,
-        stack: typedError.stack,
+        message: processingError.message,
+        stack: processingError.stack,
       },
       'Message processing failed after retries; saved to dead letter queue',
     );
+  }
+
+  const afterState = await getState(message.from);
+  const parsedIntent = pickIntent(beforeState, afterState);
+  const parsedSummary = pickSummary(beforeState, afterState);
+
+  await writeMessageLog({
+    twilioSid: message.id,
+    shopId: afterState?.shopId ?? beforeState?.shopId ?? null,
+    phone: message.from,
+    channel: message.channel,
+    inboundText: message.body || '(empty)',
+    parsedIntent,
+    parsedSummary,
+    updateApplied: !processingError && didApplyMutation(message.body, beforeState, afterState),
+    status: processingError ? 'FAILED' : 'PROCESSED',
+    errorMessage: processingError?.message,
+    responseText,
+  });
+
+
+  const logShopId = afterState?.shopId ?? beforeState?.shopId ?? null;
+
+  if (logShopId) {
+    try {
+      await rebuildSite(logShopId);
+    } catch (error) {
+      const typedError = error instanceof Error ? error : new Error(String(error));
+      logger.error(
+        {
+          event: 'error',
+          type: typedError.name,
+          message: typedError.message,
+          stack: typedError.stack,
+          shopId: logShopId,
+          phone: message.from,
+        },
+        'Failed to rebuild site after message logging',
+      );
+    }
   }
 
   try {

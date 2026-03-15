@@ -9,6 +9,17 @@ type GeminiJsonOptions = {
   maxOutputTokens?: number;
 };
 
+
+function isMockLlmEnabled(): boolean {
+  const parseBool = (value: string | undefined): boolean => {
+    if (!value) return false;
+    const normalized = value.trim().toLowerCase();
+    return normalized === '1' || normalized === 'true' || normalized === 'yes';
+  };
+
+  return parseBool(process.env.MOCK_LLM) || parseBool(process.env.MOCK_ANTHROPIC) || config.MOCK_LLM;
+}
+
 type GeminiResponse = {
   candidates?: Array<{
     content?: {
@@ -59,7 +70,7 @@ function extractTextFromGeminiResponse(payload: GeminiResponse): string {
 }
 
 export async function generateGeminiJson<T>(options: GeminiJsonOptions): Promise<T | null> {
-  if (config.MOCK_LLM) {
+  if (isMockLlmEnabled()) {
     return null;
   }
 

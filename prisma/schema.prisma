@@ -23,6 +23,35 @@ model Shop {
   services  Service[]
   hours     Hour[]
   notices   Notice[]
+  logs      MessageLog[]
+}
+
+enum MessageProcessStatus {
+  RECEIVED
+  PROCESSED
+  FAILED
+}
+
+model MessageLog {
+  id            String               @id @default(uuid())
+  twilioSid     String?              @unique
+  shopId        String?
+  shop          Shop?                @relation(fields: [shopId], references: [id])
+  phone         String
+  channel       String
+  inboundText   String
+  parsedIntent  String?
+  parsedSummary String?
+  updateApplied Boolean              @default(false)
+  status        MessageProcessStatus @default(RECEIVED)
+  errorMessage  String?
+  responseText  String?
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+
+  @@index([shopId, createdAt])
+  @@index([phone, createdAt])
+  @@index([status])
 }
 
 enum ShopStatus {

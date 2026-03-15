@@ -59,6 +59,10 @@ const pagesRoutes: FastifyPluginAsync = async (fastify) => {
             },
             orderBy: { createdAt: 'desc' },
           },
+          logs: {
+            orderBy: { createdAt: 'desc' },
+            take: 50,
+          },
         },
       });
 
@@ -97,6 +101,10 @@ const pagesRoutes: FastifyPluginAsync = async (fastify) => {
             OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
           },
           orderBy: { createdAt: 'desc' },
+        },
+        logs: {
+          orderBy: { createdAt: 'desc' },
+          take: 50,
         },
       },
     });

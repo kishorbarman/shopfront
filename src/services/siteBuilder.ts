@@ -36,6 +36,10 @@ export async function rebuildSite(shopId: string): Promise<void> {
         },
         orderBy: { createdAt: 'desc' },
       },
+      logs: {
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+      },
     },
   });
 
