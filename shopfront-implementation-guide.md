@@ -42,7 +42,7 @@ TECH STACK:
 - Framework: Fastify
 - Database: PostgreSQL via Prisma ORM
 - Cache: Redis via ioredis
-- LLM: Anthropic Claude SDK (@anthropic-ai/sdk)
+- LLM: Google Gemini API
 - SMS/WhatsApp: Twilio (twilio package)
 - Linting: ESLint + Prettier
  
@@ -364,7 +364,7 @@ Step 2 - CATEGORY:
  
 Step 3 - SERVICES:
   Agent sends: "List your services and prices however feels natural. Like: 'Haircut $25, Fade $30'"
-  Parse: Use Claude to extract name/price pairs from free-form text
+  Parse: Use Gemini to extract name/price pairs from free-form text
   Confirm: Show parsed list back, ask "Look right?"
  
 Step 4 - SERVICES_CONFIRM:
@@ -373,7 +373,7 @@ Step 4 - SERVICES_CONFIRM:
  
 Step 5 - HOURS:
   Agent sends: "What are your hours? Like: 'Mon-Fri 9-6, Sat 10-4, closed Sunday'"
-  Parse: Use Claude to extract day/time ranges into structured hours
+  Parse: Use Gemini to extract day/time ranges into structured hours
  
 Step 6 - ADDRESS:
   Agent sends: "What's your address? Helps customers find you."
@@ -388,7 +388,7 @@ Step 7 - COMPLETE:
   Set conversation state mode to "active"
  
 LLM INTEGRATION:
-Create src/agent/parsers.ts with parsing functions that use Claude Haiku:
+Create src/agent/parsers.ts with parsing functions that use Gemini Flash:
  
 async function parseBusinessName(text: string): Promise<string>
 async function parseCategory(text: string): Promise<string>
@@ -434,7 +434,7 @@ Step 6: Intent Classification Pipeline
 For existing shop owners, classify what they want to do and route to the right handler.
 
 Deliverables
-	•	Intent classifier using Claude Haiku
+	•	Intent classifier using Gemini Flash
 	•	Confidence scoring and clarification triggers
 	•	Intent routing to handler functions (stubs for now)
 ▶ CLAUDE CODE PROMPT
@@ -478,7 +478,7 @@ async function classifyIntent(
 ): Promise<ClassificationResult>
  
 Implementation:
-- Use Claude Haiku for speed and cost efficiency
+- Use Gemini Flash for speed and cost efficiency
 - System prompt should include:
   * The list of supported intents with examples
   * The shop's current services list (so it can match "change the fade" to the right service)
@@ -527,7 +527,7 @@ Step 7: Entity Extraction + Update Handlers
 Implement the full update handlers that extract structured data, confirm with the user, and mutate the database.
 
 Deliverables
-	•	Entity extraction for each intent using Claude Sonnet with tool use
+	•	Entity extraction for each intent using Gemini Pro with tool use
 	•	Confirmation flow with pending action in state
 	•	Database mutations for all CRUD operations
 	•	Query handler that reads and responds with current data
@@ -537,7 +537,7 @@ structured data from the user's message, confirms the action, and
 applies the change to the database.
  
 ENTITY EXTRACTION:
-Create src/agent/extractors.ts. Use Claude Sonnet with function/tool
+Create src/agent/extractors.ts. Use Gemini Pro with function/tool
 calling to extract structured entities. Define tool schemas for each intent:
  
 For add_service:
@@ -838,7 +838,7 @@ Create src/config.ts that validates all required env vars on startup:
 - DATABASE_URL
 - REDIS_URL
 - TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_SMS_NUMBER, TWILIO_WHATSAPP_NUMBER
-- ANTHROPIC_API_KEY
+- GEMINI_API_KEY
 - BASE_URL (e.g., https://shopfront.page)
 Fail fast with clear error messages if any are missing.
  

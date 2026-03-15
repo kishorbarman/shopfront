@@ -13,13 +13,13 @@ type AppConfig = {
   TWILIO_AUTH_TOKEN: string;
   TWILIO_SMS_NUMBER: string;
   TWILIO_WHATSAPP_NUMBER: string;
-  ANTHROPIC_API_KEY: string;
+  GEMINI_API_KEY: string;
   SENTRY_DSN: string;
   BASE_URL: string;
   SITE_OUTPUT_DIR: string;
   SKIP_TWILIO_VALIDATION: boolean;
   SKIP_TWILIO_SEND: boolean;
-  MOCK_ANTHROPIC: boolean;
+  MOCK_LLM: boolean;
 };
 
 function requiredString(name: string, env: NodeJS.ProcessEnv, errors: string[]): string {
@@ -55,6 +55,15 @@ function resolveSiteOutputDir(env: NodeJS.ProcessEnv, nodeEnv: NodeEnv): string 
   return nodeEnv === 'production' ? '/tmp/sites' : 'public/sites';
 }
 
+function resolveMockLlm(env: NodeJS.ProcessEnv): boolean {
+  return parseBoolean('MOCK_LLM', env) || parseBoolean('MOCK_ANTHROPIC', env);
+}
+
+
+function resolveGeminiApiKey(env: NodeJS.ProcessEnv): string {
+  return env.GEMINI_API_KEY?.trim() || env.ANTHROPIC_API_KEY?.trim() || '';
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const errors: string[] = [];
 
@@ -63,6 +72,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   if (nodeEnv !== 'development' && nodeEnv !== 'production') {
     errors.push(`Invalid NODE_ENV: expected "development" or "production", received "${nodeEnv}"`);
   }
+
+  const mockLlm = resolveMockLlm(env);
 
   const config: AppConfig = {
     NODE_ENV,
@@ -73,13 +84,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     TWILIO_AUTH_TOKEN: requiredString('TWILIO_AUTH_TOKEN', env, errors),
     TWILIO_SMS_NUMBER: requiredString('TWILIO_SMS_NUMBER', env, errors),
     TWILIO_WHATSAPP_NUMBER: requiredString('TWILIO_WHATSAPP_NUMBER', env, errors),
-    ANTHROPIC_API_KEY: requiredString('ANTHROPIC_API_KEY', env, errors),
+    GEMINI_API_KEY: mockLlm ? resolveGeminiApiKey(env) : resolveGeminiApiKey(env) || requiredString('GEMINI_API_KEY', env, errors),
     SENTRY_DSN: env.SENTRY_DSN?.trim() ?? '',
     BASE_URL: requiredString('BASE_URL', env, errors),
     SITE_OUTPUT_DIR: resolveSiteOutputDir(env, NODE_ENV),
     SKIP_TWILIO_VALIDATION: parseBoolean('SKIP_TWILIO_VALIDATION', env),
     SKIP_TWILIO_SEND: parseBoolean('SKIP_TWILIO_SEND', env),
-    MOCK_ANTHROPIC: parseBoolean('MOCK_ANTHROPIC', env),
+    MOCK_LLM: mockLlm,
   };
 
   if (config.NODE_ENV === 'production' && !config.SENTRY_DSN) {

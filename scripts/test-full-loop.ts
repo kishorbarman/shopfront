@@ -4,7 +4,7 @@ import path from 'node:path';
 
 process.env.SKIP_TWILIO_VALIDATION = 'true';
 process.env.SKIP_TWILIO_SEND = 'true';
-process.env.MOCK_ANTHROPIC = 'true';
+process.env.MOCK_LLM = 'true';
 
 import { prisma } from '../src/lib/prisma';
 import { redis } from '../src/lib/redis';

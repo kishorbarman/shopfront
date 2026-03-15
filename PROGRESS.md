@@ -145,7 +145,7 @@ Implemented:
   - `parseCategory`
   - `parseServices`
   - `parseHours`
-  - Uses Claude Haiku when API key is available
+  - Uses Gemini Flash when API key is available
   - Includes deterministic fallback parsing for local/test mode
 - Agent routing update in `src/services/agent.ts`:
   - Unknown phone numbers enter onboarding flow
@@ -187,7 +187,7 @@ Verification completed:
 Implemented:
 - Intent taxonomy and result schema in `src/agent/intents.ts`
 - Intent classifier in `src/agent/classifier.ts`
-  - Claude Haiku classification path
+  - Gemini Flash classification path
   - Heuristic fallback path for local/test mode
   - Confidence threshold handling (`< 0.7` => clarification)
   - Media/photo-aware classification
@@ -446,7 +446,7 @@ Step 10 verification mapping:
 Implemented:
 - Added environment validation and fail-fast config loader:
   - `src/config.ts`
-  - Validates required env vars: `NODE_ENV`, `PORT`, `DATABASE_URL`, `REDIS_URL`, Twilio vars, `ANTHROPIC_API_KEY`, `BASE_URL`
+  - Validates required env vars: `NODE_ENV`, `PORT`, `DATABASE_URL`, `REDIS_URL`, Twilio vars, `GEMINI_API_KEY`, `BASE_URL`
 - Production server hardening in `src/index.ts`:
   - Fastify logger (pino)
   - CORS (`@fastify/cors`)
@@ -481,7 +481,7 @@ Verification completed (March 8, 2026):
 - Local quality checks:
   - `npm run lint` passed
   - `npm run build` passed
-  - `MOCK_ANTHROPIC=true npm test` passed (`35/35`)
+  - `MOCK_LLM=true npm test` passed (`35/35`)
 - Env validation behavior:
   - Invalid `NODE_ENV=staging` fails fast with clear error
   - Missing envs fail fast with clear, enumerated errors

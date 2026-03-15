@@ -1,36 +1,11 @@
-import Anthropic from '@anthropic-ai/sdk';
-
 import { type ClassificationResult, SUPPORTED_INTENTS } from './intents';
-import config from '../config';
+import { generateGeminiJson } from '../lib/gemini';
 import logger from '../lib/logger';
 
 interface ClassifierOptions {
   hasMedia?: boolean;
 }
 
-let anthropicClient: Anthropic | null = null;
-
-function getAnthropicClient(): Anthropic | null {
-  if (config.MOCK_ANTHROPIC) {
-    return null;
-  }
-
-  const apiKey = config.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    return null;
-  }
-
-  if (!anthropicClient) {
-    anthropicClient = new Anthropic({ apiKey });
-  }
-
-  return anthropicClient;
-}
-
-function extractTextContent(content: Anthropic.Messages.ContentBlock[]): string {
-  const textBlocks = content.filter((block): block is Anthropic.Messages.TextBlock => block.type === 'text');
-  return textBlocks.map((block) => block.text).join('\n').trim();
-}
 
 function safeJsonParse<T>(text: string): T | null {
   try {
@@ -175,35 +150,21 @@ export async function classifyIntent(
   options?: ClassifierOptions,
 ): Promise<ClassificationResult> {
   const heuristic = classifyHeuristically(message, shopContext, options);
-  const client = getAnthropicClient();
-
-  if (!client) {
-    return heuristic.confidence < 0.7
-      ? {
-          ...heuristic,
-          needsClarification: true,
-          clarificationQuestion:
-            heuristic.clarificationQuestion ??
-            'I can help with services, hours, notices, and photos. What should I update?',
-        }
-      : heuristic;
-  }
 
   try {
-    const response = await client.messages.create({
-      model: 'claude-3-5-haiku-latest',
-      max_tokens: 512,
+    const parsedRaw = await generateGeminiJson<ClassificationResult>({
+      model: 'gemini-2.0-flash',
+      maxOutputTokens: 512,
       temperature: 0,
-      system: buildSystemPrompt(shopContext),
-      messages: [
-        {
-          role: 'user',
-          content: `History: ${JSON.stringify(history.slice(-5))}\nMessage: ${JSON.stringify(message)}`,
-        },
-      ],
+      systemPrompt: buildSystemPrompt(shopContext),
+      userPrompt: `History: ${JSON.stringify(history.slice(-5))}\nMessage: ${JSON.stringify(message)}`,
     });
 
-    const parsed = parseModelClassification(extractTextContent(response.content));
+    if (!parsedRaw) {
+      return heuristic;
+    }
+
+    const parsed = parseModelClassification(JSON.stringify(parsedRaw));
     if (!parsed) {
       return heuristic;
     }

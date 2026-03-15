@@ -8,7 +8,7 @@ import Redis from 'ioredis';
 import sharp from 'sharp';
 
 process.env.REDIS_URL = 'redis://127.0.0.1:6379/15';
-process.env.MOCK_ANTHROPIC = 'true';
+process.env.MOCK_LLM = 'true';
 
 import { prisma } from '../src/lib/prisma';
 import { redis as sharedRedis } from '../src/lib/redis';

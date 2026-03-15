@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-process.env.MOCK_ANTHROPIC = 'true';
+process.env.MOCK_LLM = 'true';
 
 import { extractMutationEntities } from '../src/agent/extractors';
 

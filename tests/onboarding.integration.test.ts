@@ -3,7 +3,7 @@ import test from 'node:test';
 import Redis from 'ioredis';
 
 process.env.REDIS_URL = 'redis://127.0.0.1:6379/15';
-process.env.MOCK_ANTHROPIC = 'true';
+process.env.MOCK_LLM = 'true';
 
 import { prisma } from '../src/lib/prisma';
 import { redis as sharedRedis } from '../src/lib/redis';

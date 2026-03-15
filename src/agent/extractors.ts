@@ -1,7 +1,5 @@
-import Anthropic from '@anthropic-ai/sdk';
-
 import { parseHours } from './parsers';
-import config from '../config';
+import { generateGeminiJson } from '../lib/gemini';
 import logger from '../lib/logger';
 
 export type MutationIntent =
@@ -34,25 +32,6 @@ type ExtractionResult =
       reason: string;
       clarificationQuestion: string;
     };
-
-let anthropicClient: Anthropic | null = null;
-
-function getAnthropicClient(): Anthropic | null {
-  if (config.MOCK_ANTHROPIC) {
-    return null;
-  }
-
-  const apiKey = config.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    return null;
-  }
-
-  if (!anthropicClient) {
-    anthropicClient = new Anthropic({ apiKey });
-  }
-
-  return anthropicClient;
-}
 
 function normalize(input: string): string {
   return input.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -291,18 +270,6 @@ function parseUpdatePhotoHeuristic(hasMedia?: boolean) {
   return { useAsMain: true };
 }
 
-function parseToolUse(content: Anthropic.Messages.ContentBlock[]) {
-  const toolBlock = content.find((block) => block.type === 'tool_use') as Anthropic.Messages.ToolUseBlock | undefined;
-  if (!toolBlock) {
-    return null;
-  }
-
-  return {
-    name: toolBlock.name,
-    input: toolBlock.input as Record<string, any>,
-  };
-}
-
 function toolForIntent(intent: MutationIntent) {
   switch (intent) {
     case 'add_service':
@@ -439,43 +406,34 @@ function toolForIntent(intent: MutationIntent) {
 }
 
 async function extractWithSonnet(intent: MutationIntent, message: string, context: ExtractContext) {
-  const client = getAnthropicClient();
-  if (!client) return null;
-
   const tool = toolForIntent(intent);
   if (!tool) return null;
 
   try {
-    const response = await client.messages.create({
-      model: 'claude-3-7-sonnet-latest',
-      max_tokens: 700,
+    const extracted = await generateGeminiJson<Record<string, any>>({
+      model: 'gemini-2.0-flash',
+      maxOutputTokens: 700,
       temperature: 0,
-      system:
-        'Extract structured fields for the provided tool. Use the tool exactly once when data is inferable. If uncertain, still provide best effort.',
-      tools: [tool as Anthropic.Messages.Tool],
-      tool_choice: { type: 'tool', name: tool.name },
-      messages: [
-        {
-          role: 'user',
-          content: JSON.stringify({
-            intent,
-            message,
-            shopName: context.shopName,
-            services: context.services,
-            notices: context.notices ?? [],
-            hasMedia: context.hasMedia ?? false,
-          }),
-        },
-      ],
+      systemPrompt:
+        'You extract structured fields for a requested mutation intent. Return ONLY valid JSON matching the provided schema. Prefer best-effort extraction over null.',
+      userPrompt: JSON.stringify({
+        intent,
+        message,
+        schema: tool.input_schema,
+        shopName: context.shopName,
+        services: context.services,
+        notices: context.notices ?? [],
+        hasMedia: context.hasMedia ?? false,
+      }),
     });
 
-    const parsedTool = parseToolUse(response.content);
-    if (!parsedTool) return null;
-
-    return parsedTool.input;
+    return extracted;
   } catch (error) {
     const typedError = error instanceof Error ? error : new Error(String(error));
-    logger.error({ event: 'error', type: typedError.name, message: typedError.message, stack: typedError.stack }, 'Sonnet entity extraction failed');
+    logger.error(
+      { event: 'error', type: typedError.name, message: typedError.message, stack: typedError.stack },
+      'Gemini entity extraction failed',
+    );
     return null;
   }
 }

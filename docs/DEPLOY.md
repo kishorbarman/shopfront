@@ -31,11 +31,11 @@ Set these in the Railway `shopfront` service:
 - `TWILIO_AUTH_TOKEN`
 - `TWILIO_SMS_NUMBER`
 - `TWILIO_WHATSAPP_NUMBER`
-- `ANTHROPIC_API_KEY`
+- `GEMINI_API_KEY`
 - `BASE_URL=https://shopfront-production-2dc5.up.railway.app`
 - `SKIP_TWILIO_VALIDATION=false`
 - `SKIP_TWILIO_SEND=false`
-- `MOCK_ANTHROPIC=false`
+- `MOCK_LLM=false`
 
 ## 4. Run Database Migrations
 

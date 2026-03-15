@@ -1,7 +1,4 @@
-import Anthropic from '@anthropic-ai/sdk';
-
-import config from '../config';
-import logger from '../lib/logger';
+import { generateGeminiJson } from '../lib/gemini';
 
 const EXTRACTION_SYSTEM_PROMPT =
   "You are a data extraction assistant. Extract structured data from the user's message. Respond ONLY with valid JSON.";
@@ -9,79 +6,14 @@ const EXTRACTION_SYSTEM_PROMPT =
 type ParsedService = { name: string; price: number };
 type ParsedHour = { dayOfWeek: number; open: string; close: string; isClosed: boolean };
 
-let anthropicClient: Anthropic | null = null;
-
-function getAnthropicClient(): Anthropic | null {
-  if (config.MOCK_ANTHROPIC) {
-    return null;
-  }
-
-  const apiKey = config.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    return null;
-  }
-
-  if (!anthropicClient) {
-    anthropicClient = new Anthropic({ apiKey });
-  }
-
-  return anthropicClient;
-}
-
-function extractTextContent(content: Anthropic.Messages.ContentBlock[]): string {
-  const textBlocks = content.filter((block): block is Anthropic.Messages.TextBlock => block.type === 'text');
-  return textBlocks.map((block) => block.text).join('\n').trim();
-}
-
-function tryParseJson<T>(rawText: string): T | null {
-  const text = rawText.trim();
-  if (!text) {
-    return null;
-  }
-
-  const direct = safeJsonParse<T>(text);
-  if (direct) {
-    return direct;
-  }
-
-  const match = text.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
-  if (!match) {
-    return null;
-  }
-
-  return safeJsonParse<T>(match[0]);
-}
-
-function safeJsonParse<T>(text: string): T | null {
-  try {
-    return JSON.parse(text) as T;
-  } catch {
-    return null;
-  }
-}
-
 async function extractWithClaude<T>(prompt: string): Promise<T | null> {
-  const client = getAnthropicClient();
-  if (!client) {
-    return null;
-  }
-
-  try {
-    const response = await client.messages.create({
-      model: 'claude-3-5-haiku-latest',
-      max_tokens: 512,
-      temperature: 0,
-      system: EXTRACTION_SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: prompt }],
-    });
-
-    const text = extractTextContent(response.content);
-    return tryParseJson<T>(text);
-  } catch (error) {
-    const typedError = error instanceof Error ? error : new Error(String(error));
-    logger.error({ event: 'error', type: typedError.name, message: typedError.message, stack: typedError.stack }, 'Claude parsing failed');
-    return null;
-  }
+  return generateGeminiJson<T>({
+    model: 'gemini-2.0-flash',
+    systemPrompt: EXTRACTION_SYSTEM_PROMPT,
+    userPrompt: prompt,
+    maxOutputTokens: 512,
+    temperature: 0,
+  });
 }
 
 function normalizeBusinessName(text: string): string | null {

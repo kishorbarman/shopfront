@@ -36,7 +36,7 @@ jobs:
       PORT: 3000
       DATABASE_URL: postgresql://shopfront:shopfront@localhost:5432/shopfront_test?schema=public
       REDIS_URL: redis://localhost:6379
-      ANTHROPIC_API_KEY: test-anthropic-key
+      GEMINI_API_KEY: test-gemini-key
       TWILIO_ACCOUNT_SID: test-account-sid
       TWILIO_AUTH_TOKEN: test-auth-token
       TWILIO_SMS_NUMBER: "+1234567890"
@@ -44,7 +44,7 @@ jobs:
       BASE_URL: http://localhost:3000
       SKIP_TWILIO_VALIDATION: true
       SKIP_TWILIO_SEND: true
-      MOCK_ANTHROPIC: true
+      MOCK_LLM: true
 
     steps:
       - name: Checkout
