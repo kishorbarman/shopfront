@@ -88,6 +88,19 @@ function detectPhotoTarget(text: string): PhotoTarget {
   return 'unknown';
 }
 
+function describeHourChanges(changes: Array<{ dayOfWeek: number; openTime?: string; closeTime?: string; isClosed?: boolean }>): string {
+  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const lines = changes.map((change) => {
+    const day = dayNames[change.dayOfWeek] ?? `Day ${change.dayOfWeek}`;
+    if (change.isClosed) return `${day}: Closed`;
+    if (change.openTime && change.closeTime) return `${day}: ${change.openTime}-${change.closeTime}`;
+    if (change.openTime) return `${day}: opens at ${change.openTime}`;
+    if (change.closeTime) return `${day}: closes at ${change.closeTime}`;
+    return `${day}: Updated`;
+  });
+  return lines.join('; ');
+}
+
 type ShopContext = Shop & {
   services: Pick<Service, 'name' | 'price'>[];
   hours: Pick<Hour, 'dayOfWeek' | 'openTime' | 'closeTime' | 'isClosed'>[];
@@ -197,8 +210,9 @@ async function executePendingAction(
 
   if (intent === 'update_hours') {
     await updateHours(shop.id, data.changes);
+    const detail = Array.isArray(data.changes) ? describeHourChanges(data.changes) : 'Hours updated.';
     return {
-      response: 'Done! Your hours have been updated.',
+      response: 'Updated! Hours changed: ' + detail,
       state: { ...state, mode: 'active', pendingAction: undefined },
     };
   }
@@ -212,7 +226,7 @@ async function executePendingAction(
     });
 
     return {
-      response: "Got it! You're marked as closed for that period.",
+      response: 'Got it! Closure notice posted: "' + data.message + '".',
       state: { ...state, mode: 'active', pendingAction: undefined },
     };
   }
@@ -220,7 +234,7 @@ async function executePendingAction(
   if (intent === 'update_contact') {
     await updateContact(shop.id, data.field, data.value);
     return {
-      response: `Done! Your ${data.field} has been updated.`,
+      response: 'Updated! ' + data.field + ' is now ' + data.value + '.',
       state: { ...state, mode: 'active', pendingAction: undefined },
     };
   }
@@ -233,7 +247,7 @@ async function executePendingAction(
     });
 
     return {
-      response: 'Done! Your notice is now live.',
+      response: 'Done! Notice is live: "' + data.message + '".',
       state: { ...state, mode: 'active', pendingAction: undefined },
     };
   }
@@ -552,8 +566,7 @@ export async function processMessage(message: InboundMessage): Promise<string> {
           throw new AgentParseError(extraction.reason);
         }
 
-        response = extraction.confirmationMessage;
-        state = {
+        const transientState: ConversationState = {
           ...state,
           mode: 'awaiting_confirmation',
           shopId: existingShop.id,
@@ -562,6 +575,14 @@ export async function processMessage(message: InboundMessage): Promise<string> {
             data: extraction.data,
             confirmationMessage: extraction.confirmationMessage,
           },
+          lastMessageAt: new Date().toISOString(),
+        };
+
+        const executed = await executePendingAction(existingShop, transientState);
+        response = executed.response;
+        state = {
+          ...executed.state,
+          shopId: existingShop.id,
           lastMessageAt: new Date().toISOString(),
         };
       } else {

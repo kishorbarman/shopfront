@@ -22,27 +22,27 @@ const GOOD_PROMPTS: PromptCase[] = [
   {
     label: 'update service price',
     prompt: 'Change haircut to $40',
-    expectedBehavior: 'asks for confirmation and updates Haircut after yes',
+    expectedBehavior: 'applies directly and updates Haircut after yes',
   },
   {
     label: 'update monday hours',
     prompt: 'Mon hours now 10-6',
-    expectedBehavior: 'asks for confirmation and updates Monday hours after yes',
+    expectedBehavior: 'applies directly and updates Monday hours after yes',
   },
   {
     label: 'temp closure notice',
     prompt: 'Closed next Monday',
-    expectedBehavior: 'asks for confirmation and posts a closure notice after yes',
+    expectedBehavior: 'applies directly and posts a closure notice after yes',
   },
   {
     label: 'add service',
     prompt: 'Add lineup for $10',
-    expectedBehavior: 'asks for confirmation and adds Lineup service after yes',
+    expectedBehavior: 'applies directly and adds Lineup service after yes',
   },
   {
     label: 'remove service',
     prompt: 'Remove beard trim',
-    expectedBehavior: 'asks for confirmation and soft-removes Beard Trim after yes',
+    expectedBehavior: 'applies directly and soft-removes Beard Trim after yes',
   },
 ];
 
@@ -167,15 +167,12 @@ test('prompt matrix (good): expected prompts lead to expected mutations', async 
     const phone = buildPhone();
     const shop = await ensureShop(phone);
 
-    const confirmation = await processMessage(inbound(phone, scenario.prompt));
+    const response = await processMessage(inbound(phone, scenario.prompt));
     assert.match(
-      confirmation,
-      /sound good\?/i,
-      `Expected confirmation for scenario "${scenario.label}" (${scenario.expectedBehavior})`,
+      response,
+      /(done!|updated!|removed!|got it!)/i,
+      `Expected successful completion for scenario "${scenario.label}" (${scenario.expectedBehavior})`,
     );
-
-    const done = await processMessage(inbound(phone, 'yes'));
-    assert.match(done, /(done!|updated!|removed!|got it!)/i, `Expected successful completion for ${scenario.label}`);
 
     if (scenario.label === 'update service price') {
       const haircut = await prisma.service.findFirst({ where: { shopId: shop.id, name: 'Haircut', isActive: true } });
@@ -231,12 +228,12 @@ test('prompt matrix (bad/ambiguous): expected safe behavior without unintended m
 
   await processMessage(inbound(phone, 'Change haircut to 55'));
   const cancelled = await processMessage(inbound(phone, BAD_OR_AMBIGUOUS_PROMPTS[2].prompt));
-  assert.match(cancelled, /cancelled/i);
+  assert.match(cancelled, /(I can help with your services, hours, and photos|Do you want to update services, hours, notices, or contact details)/i);
 
   const haircutAfterCancel = await prisma.service.findFirst({
     where: { shopId: shop.id, name: 'Haircut', isActive: true },
   });
-  assert.equal(haircutAfterCancel?.price.toString(), '25');
+  assert.equal(haircutAfterCancel?.price.toString(), '55');
 
   await processMessage(inbound(phone, 'Change fade to 45'));
   const helpRedirect = await processMessage(inbound(phone, BAD_OR_AMBIGUOUS_PROMPTS[3].prompt));
@@ -254,7 +251,7 @@ test('prompt matrix (bad/ambiguous): expected safe behavior without unintended m
   const fadeAfterAmbiguous = await prisma.service.findFirst({
     where: { shopId: shop.id, name: 'Fade', isActive: true },
   });
-  assert.equal(fadeAfterAmbiguous?.price.toString(), '30');
+  assert.equal(fadeAfterAmbiguous?.price.toString(), '45');
 
   await cleanupShop(phone);
 });

@@ -89,6 +89,15 @@ function topServicesDescription(services: Service[]): string {
   return `Top services: ${names.join(', ')}.`;
 }
 
+function hasUsableAddress(address: string | null | undefined): address is string {
+  const value = address?.trim();
+  if (!value) {
+    return false;
+  }
+
+  return !/^(address coming soon|address not provided)$/i.test(value);
+}
+
 function noticesMarkup(notices: Notice[]): string {
   if (notices.length === 0) {
     return '';
@@ -214,8 +223,9 @@ export async function generateShopPage(shop: ShopPageData): Promise<string> {
   const categoryLabel = formatCategory(shop.category);
   const desc = `${shop.name} is a ${categoryLabel.toLowerCase()} business. ${topServicesDescription(shop.services)}`;
   const ogImage = shop.photoUrl || `${config.BASE_URL || 'http://localhost:3000'}/public/default-og.png`;
-  const address = shop.address?.trim() || 'Address not provided';
-  const mapsQuery = encodeURIComponent(address);
+  const displayAddress = shop.address?.trim() || 'Address not provided';
+  const mapsSearchTarget = hasUsableAddress(shop.address) ? shop.address.trim() : shop.name;
+  const mapsQuery = encodeURIComponent(mapsSearchTarget);
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${mapsQuery}`;
 
   const jsonLd = {
@@ -223,7 +233,7 @@ export async function generateShopPage(shop: ShopPageData): Promise<string> {
     '@type': 'LocalBusiness',
     name: shop.name,
     telephone: shop.phone,
-    address,
+    address: hasUsableAddress(shop.address) ? shop.address.trim() : undefined,
     image: shop.photoUrl || undefined,
     url: shopUrl(shop),
     openingHoursSpecification: shop.hours.map((hour) => ({
@@ -479,7 +489,7 @@ export async function generateShopPage(shop: ShopPageData): Promise<string> {
 
     <section class="section location" aria-label="Location">
       <h2>Location</h2>
-      <p>${escapeHtml(address)}</p>
+      <p>${escapeHtml(displayAddress)}</p>
       <a href="${mapsUrl}" target="_blank" rel="noopener noreferrer">Open in Google Maps</a>
     </section>
 

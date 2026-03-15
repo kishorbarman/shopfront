@@ -131,14 +131,11 @@ test.after(async () => {
   await prisma.$disconnect();
 });
 
-test('confirm then execute update_service mutation', async () => {
+test('update_service mutation applies immediately without yes confirmation', async () => {
   const phone = buildPhone();
   await ensureShop(phone);
 
-  const confirmation = await processMessage(inbound(phone, 'Change fade to $35'));
-  assert.match(confirmation, /sound good\?/i);
-
-  const done = await processMessage(inbound(phone, 'yes'));
+  const done = await processMessage(inbound(phone, 'Change fade to $35'));
   assert.match(done, /Updated! Fade is now \$35/i);
 
   const shop = await prisma.shop.findUniqueOrThrow({
@@ -148,34 +145,42 @@ test('confirm then execute update_service mutation', async () => {
   const fade = shop.services.find((service) => service.name === 'Fade');
   assert.equal(fade?.price.toString(), '35');
 
+  const state = await getState(phone);
+  assert.notEqual(state?.mode, 'awaiting_confirmation');
+  assert.equal(state?.pendingAction, undefined);
+
   await cleanupShop(phone);
 });
 
-test('cancel pending mutation does not update DB', async () => {
+test('follow-up cancel does not revert an already-applied mutation', async () => {
   const phone = buildPhone();
   await ensureShop(phone);
 
   await processMessage(inbound(phone, 'Change haircut to 50'));
-  const cancelled = await processMessage(inbound(phone, 'cancel'));
-  assert.match(cancelled, /cancelled/i);
+  const cancelReply = await processMessage(inbound(phone, 'cancel'));
+  assert.match(cancelReply, /services, hours|contact details|what would you like to update/i);
 
   const shop = await prisma.shop.findUniqueOrThrow({
     where: { phone },
     include: { services: true },
   });
   const haircut = shop.services.find((service) => service.name === 'Haircut');
-  assert.equal(haircut?.price.toString(), '25');
+  assert.equal(haircut?.price.toString(), '50');
 
   await cleanupShop(phone);
 });
 
-test('new unrelated message while awaiting confirmation redirects to new classification', async () => {
+test('new unrelated message routes normally after immediate mutation apply', async () => {
   const phone = buildPhone();
   await ensureShop(phone);
 
   await processMessage(inbound(phone, 'Change haircut to 40'));
   const redirected = await processMessage(inbound(phone, 'What can you do?'));
   assert.match(redirected, /I can add\/update\/remove services/i);
+
+  const state = await getState(phone);
+  assert.notEqual(state?.mode, 'awaiting_confirmation');
+  assert.equal(state?.pendingAction, undefined);
 
   await cleanupShop(phone);
 });
@@ -196,12 +201,11 @@ test('query responses return current services, hours, and notices', async () => 
   await cleanupShop(phone);
 });
 
-test('fuzzy service matching updates abbreviations/typos', async () => {
+test('fuzzy service matching updates abbreviations/typos immediately', async () => {
   const phone = buildPhone();
   await ensureShop(phone);
 
-  await processMessage(inbound(phone, 'Change hot towel to 22'));
-  const done = await processMessage(inbound(phone, 'yes'));
+  const done = await processMessage(inbound(phone, 'Change hot towel to 22'));
   assert.match(done, /Updated!/i);
 
   const shop = await prisma.shop.findUniqueOrThrow({
