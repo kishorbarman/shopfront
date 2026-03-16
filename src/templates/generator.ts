@@ -182,8 +182,9 @@ function trimForLog(value: string, limit = 180): string {
 
 function logsMarkup(logs: MessageLog[] | undefined): string {
   const items = logs ?? [];
+
   if (items.length === 0) {
-    return `<section class="section" aria-label="Logs"><h2>Logs</h2><p class="empty">No message history yet.</p></section>`;
+    return '<section class="section" aria-label="Logs"><details class="logs-disclosure"><summary>Logs <span class="logs-hint">Expand</span></summary><p class="empty">No message history yet.</p></details></section>';
   }
 
   const rows = items
@@ -204,9 +205,8 @@ function logsMarkup(logs: MessageLog[] | undefined): string {
     })
     .join('');
 
-  return `<section class="section" aria-label="Logs"><h2>Logs</h2><div class="logs-list">${rows}</div></section>`;
+  return `<section class="section" aria-label="Logs"><details class="logs-disclosure"><summary>Logs <span class="logs-hint">Expand</span></summary><div class="logs-list">${rows}</div></details></section>`;
 }
-
 function shopUrl(shop: Shop): string {
   const baseUrl = config.BASE_URL || 'http://localhost:3000';
   const root = baseUrl.replace(/\/$/, '');
@@ -422,6 +422,36 @@ export async function generateShopPage(shop: ShopPageData): Promise<string> {
       font-size: 13px;
     }
 
+    .logs-disclosure {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fff;
+      padding: 0;
+    }
+    .logs-disclosure > summary {
+      list-style: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 14px 14px;
+      font-weight: 800;
+      font-size: 20px;
+      color: var(--text);
+    }
+    .logs-disclosure > summary::-webkit-details-marker { display: none; }
+    .logs-hint {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--muted);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 3px 8px;
+    }
+    .logs-disclosure[open] > summary { border-bottom: 1px solid var(--line); }
+    .logs-disclosure > .logs-list,
+    .logs-disclosure > .empty { padding: 12px 14px 14px; }
     .logs-list { display: grid; gap: 10px; }
     .log-item {
       border: 1px solid var(--line);
