@@ -293,3 +293,45 @@ test('hours update phrasing does not create temp closure notice', async () => {
 
   await cleanupShop(phone);
 });
+
+test('delete website requires exact same message repeated and then purges data', async () => {
+  const phone = buildPhone();
+  await ensureShop(phone);
+
+  const first = await processMessage(inbound(phone, 'delete my website'));
+  assert.match(first, /repeat this exact message/i);
+
+  const beforeDelete = await prisma.shop.findUnique({ where: { phone } });
+  assert.ok(beforeDelete);
+
+  const second = await processMessage(inbound(phone, 'delete my website'));
+  assert.match(second, /permanently deleted/i);
+
+  const afterDelete = await prisma.shop.findUnique({ where: { phone } });
+  assert.equal(afterDelete, null);
+
+  const state = await getState(phone);
+  assert.equal(state, null);
+  assert.equal(await localRedis.exists(`state:${phone}`), 0);
+  assert.equal(await localRedis.exists(`history:${phone}`), 0);
+  assert.equal(await localRedis.exists(`rate:${phone}`), 0);
+});
+
+test('delete website does not execute when second message does not exactly match', async () => {
+  const phone = buildPhone();
+  await ensureShop(phone);
+
+  const first = await processMessage(inbound(phone, 'delete my website'));
+  assert.match(first, /repeat this exact message/i);
+
+  const second = await processMessage(inbound(phone, 'delete my website now'));
+  assert.match(second, /repeat this exact message/i);
+
+  const shopStillExists = await prisma.shop.findUnique({ where: { phone } });
+  assert.ok(shopStillExists);
+
+  const cancel = await processMessage(inbound(phone, 'no'));
+  assert.match(cancel, /deletion cancelled/i);
+
+  await cleanupShop(phone);
+});

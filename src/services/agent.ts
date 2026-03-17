@@ -19,6 +19,7 @@ import { rebuildSite } from './siteBuilder';
 import {
   addService,
   addNotice,
+  deleteWebsiteAndData,
   removeNotice,
   removeService,
   updateContact,
@@ -28,6 +29,7 @@ import {
 import {
   addMessage,
   checkRateLimit,
+  clearConversationData,
   getHistory,
   getState,
   setState,
@@ -56,6 +58,20 @@ function isAffirmative(text: string): boolean {
 
 function isNegative(text: string): boolean {
   return /^(no|nope|cancel|never mind|dont|don't|stop)\b/i.test(text.trim());
+}
+
+function normalizeDeletionMessage(text: string): string {
+  return text.trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+function isDeleteWebsiteRequest(text: string): boolean {
+  const normalized = normalizeDeletionMessage(text);
+
+  if (normalized === 'delete my website') {
+    return true;
+  }
+
+  return /(delete|remove|erase)\s+(my\s+)?(website|site|page|shop|business page)/.test(normalized);
 }
 
 function isMutationIntent(intent: IntentCategory): intent is MutationIntent {
@@ -383,6 +399,51 @@ export async function processMessage(message: InboundMessage): Promise<string> {
       response = onboarding.response;
     } else {
       if (state.mode === 'awaiting_confirmation' && state.pendingAction) {
+        if (state.pendingAction.intent === 'delete_website') {
+          const expected = String(state.pendingAction.data.expectedMessage ?? '');
+          const incoming = normalizeDeletionMessage(message.body);
+
+          if (incoming === expected) {
+            await deleteWebsiteAndData({
+              id: existingShop.id,
+              phone: existingShop.phone,
+              slug: existingShop.slug,
+            });
+
+            await clearConversationData(message.from);
+
+            response = 'Done. Your website and related data have been permanently deleted.';
+            return response;
+          }
+
+          if (isNegative(message.body)) {
+            state = {
+              ...state,
+              mode: 'active',
+              pendingAction: undefined,
+              lastMessageAt: new Date().toISOString(),
+            };
+            response = 'Deletion cancelled. Your website is still live.';
+
+            await setState(message.from, state);
+            await addMessage(message.from, 'agent', response);
+            return response;
+          }
+
+          const original = String(state.pendingAction.data.originalMessage ?? 'delete my website');
+          response = `To confirm deletion, repeat this exact message: "${original}"`;
+          state = {
+            ...state,
+            mode: 'awaiting_confirmation',
+            shopId: existingShop.id,
+            lastMessageAt: new Date().toISOString(),
+          };
+
+          await setState(message.from, state);
+          await addMessage(message.from, 'agent', response);
+          return response;
+        }
+
         if (state.pendingAction.intent === 'update_photo' && state.pendingAction.data.awaitingPhotoTarget) {
           const choice = detectPhotoTarget(message.body);
           const storedImages = Array.isArray(state.pendingAction.data.images)
@@ -487,6 +548,32 @@ export async function processMessage(message: InboundMessage): Promise<string> {
           mode: 'active',
           pendingAction: undefined,
         };
+      }
+
+      if (isDeleteWebsiteRequest(message.body)) {
+        const originalMessage = message.body.trim();
+        const expectedMessage = normalizeDeletionMessage(originalMessage);
+
+        state = {
+          ...state,
+          mode: 'awaiting_confirmation',
+          shopId: existingShop.id,
+          pendingAction: {
+            intent: 'delete_website',
+            data: {
+              expectedMessage,
+              originalMessage,
+            },
+            confirmationMessage: `Repeat this exact message to permanently delete your website: "${originalMessage}"`,
+          },
+          lastMessageAt: new Date().toISOString(),
+        };
+
+        response = `This is permanent. To confirm deletion, repeat this exact message: "${originalMessage}"`;
+
+        await setState(message.from, state);
+        await addMessage(message.from, 'agent', response);
+        return response;
       }
 
       const mediaHandled = await handleMediaForKnownShop(existingShop, state, message);

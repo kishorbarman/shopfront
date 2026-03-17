@@ -1,9 +1,12 @@
+import { promises as fs } from 'node:fs';
+import path from 'node:path';
+
 import { Prisma } from '@prisma/client';
 
 import { prisma } from '../lib/prisma';
 import { DatabaseError, ValidationError } from '../lib/errors';
 import logger from '../lib/logger';
-import { rebuildSite } from './siteBuilder';
+import { getSiteOutputPath, rebuildSite } from './siteBuilder';
 
 type ServiceUpdates = {
   newPrice?: number;
@@ -376,6 +379,34 @@ export async function updateContact(shopId: string, field: 'phone' | 'address', 
     return updated;
   } catch (error) {
     logMutation(shopId, 'update_contact', false);
+    throw wrapDatabaseError(error);
+  }
+}
+
+export async function deleteWebsiteAndData(shop: { id: string; phone: string; slug: string }): Promise<void> {
+  assertNonEmpty(shop.id, 'shopId');
+  assertNonEmpty(shop.phone, 'phone');
+  assertNonEmpty(shop.slug, 'slug');
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.service.deleteMany({ where: { shopId: shop.id } });
+      await tx.hour.deleteMany({ where: { shopId: shop.id } });
+      await tx.notice.deleteMany({ where: { shopId: shop.id } });
+      await tx.messageLog.deleteMany({ where: { OR: [{ shopId: shop.id }, { phone: shop.phone }] } });
+      await tx.failedMessage.deleteMany({ where: { phone: shop.phone } });
+      await tx.shop.delete({ where: { id: shop.id } });
+    });
+
+    await fs.rm(getSiteOutputPath(shop.slug), { recursive: true, force: true });
+    await fs.rm(path.join(process.cwd(), 'public', 'uploads', shop.id), {
+      recursive: true,
+      force: true,
+    });
+
+    logMutation(shop.id, 'delete_website', true);
+  } catch (error) {
+    logMutation(shop.id, 'delete_website', false);
     throw wrapDatabaseError(error);
   }
 }

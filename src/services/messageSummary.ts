@@ -103,6 +103,8 @@ function formatAction(intent: string, data: Record<string, any> | undefined): st
       return 'removing notice';
     case 'update_photo':
       return payload.useAsMain === false ? 'adding photo to gallery' : 'updating banner photo';
+    case 'delete_website':
+      return 'deleting website and all related data';
     default:
       return 'processing update';
   }

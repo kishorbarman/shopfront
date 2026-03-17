@@ -52,6 +52,10 @@ export async function clearState(phone: string): Promise<void> {
   await redis.del(stateKey(phone));
 }
 
+export async function clearConversationData(phone: string): Promise<void> {
+  await redis.del(stateKey(phone), historyKey(phone), rateKey(phone));
+}
+
 export async function addMessage(
   phone: string,
   role: 'user' | 'agent',
