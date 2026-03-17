@@ -43,6 +43,7 @@ function buildSystemPrompt(shopContext: { name: string; services: string[] }): s
     `Supported intents: ${SUPPORTED_INTENTS.join(', ')}`,
     'Examples:',
     '- add_service: "Add lineup for $10"',
+    '- add_service: "HairColor $30"',
     '- update_service: "Change haircut to $28"',
     '- remove_service: "Remove hot towel shave"',
     '- update_hours: "Open til 8 on Fridays"',
@@ -146,6 +147,15 @@ function classifyHeuristically(
       confidence: mentionsKnownService ? 0.9 : 0.75,
       needsClarification: false,
     };
+  }
+
+  const looksLikeServiceWithPriceTag =
+    /\$\s*\d+(?:\.\d{1,2})?/.test(text) &&
+    /[a-z]/.test(text) &&
+    !/(hours?|open|close|monday|tuesday|wednesday|thursday|friday|saturday|sunday)/.test(text);
+
+  if (looksLikeServiceWithPriceTag) {
+    return { intent: 'add_service', confidence: 0.88, needsClarification: false };
   }
 
   if (/(add|new service|include|offer)/.test(text)) {

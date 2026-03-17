@@ -166,3 +166,39 @@ test('onboarding Done preserves provided details and fills only missing fields',
 
   await clearShopDataByPhone(phone);
 });
+
+
+test('placeholder service is retired when first real service is added', async () => {
+  const phone = buildPhone();
+
+  await processMessage(inbound(phone, 'Hi'));
+  await processMessage(inbound(phone, 'Luna Studio'));
+  await processMessage(inbound(phone, 'Done'));
+
+  const response = await processMessage(inbound(phone, 'Haircolor $30'));
+  assert.match(response, /added to your menu/i);
+
+  const activeServices = await prisma.service.findMany({
+    where: {
+      shop: { phone },
+      isActive: true,
+    },
+    orderBy: { sortOrder: 'asc' },
+  });
+
+  assert.equal(activeServices.length, 1);
+  assert.equal(activeServices[0]?.name, 'Haircolor');
+  assert.equal(activeServices[0]?.price.toString(), '30');
+
+  const placeholder = await prisma.service.findFirst({
+    where: {
+      shop: { phone },
+      name: 'Services coming soon',
+    },
+  });
+
+  assert.ok(placeholder);
+  assert.equal(placeholder?.isActive, false);
+
+  await clearShopDataByPhone(phone);
+});

@@ -27,6 +27,8 @@ type NoticeInput = {
   expiresAt?: string;
 };
 
+const PLACEHOLDER_SERVICE_NAME = 'Services coming soon';
+
 function assertNonEmpty(value: string, field: string): void {
   if (!value || !value.trim()) {
     throw new ValidationError(`${field} is required.`);
@@ -148,6 +150,20 @@ export async function addService(
   }
 
   try {
+    await prisma.service.updateMany({
+      where: {
+        shopId,
+        isActive: true,
+        name: {
+          equals: PLACEHOLDER_SERVICE_NAME,
+          mode: 'insensitive',
+        },
+      },
+      data: {
+        isActive: false,
+      },
+    });
+
     const maxSort = await prisma.service.aggregate({
       where: { shopId },
       _max: { sortOrder: true },

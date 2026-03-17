@@ -113,8 +113,20 @@ function nextDayIso(dayName: string): string {
 
 function buildConfirmation(intent: MutationIntent, data: Record<string, any>): string {
   switch (intent) {
-    case 'add_service':
-      return `I'll add ${data.name} for $${data.price}. Sound good?`;
+    case 'add_service': {
+      const services = Array.isArray(data.services)
+        ? data.services
+        : data.name && data.price
+          ? [{ name: data.name, price: data.price }]
+          : [];
+      if (services.length <= 1) {
+        const first = services[0] ?? data;
+        return `I'll add ${first.name} for $${first.price}. Sound good?`;
+      }
+
+      const summary = services.map((service: { name: string; price: number }) => `${service.name} ($${service.price})`).join(', ');
+      return `I'll add these services: ${summary}. Sound good?`;
+    }
     case 'update_service': {
       const priceText = data.newPrice ? ` to $${data.newPrice}` : '';
       const nameText = data.newName ? ` as ${data.newName}` : '';
@@ -140,18 +152,53 @@ function buildConfirmation(intent: MutationIntent, data: Record<string, any>): s
 }
 
 function parseAddServiceHeuristic(message: string) {
-  const lower = message.toLowerCase();
-  const raw = lower
+  const cleaned = message
     .replace(/^(add|new service|include|offer)\s*/i, '')
-    .replace(/\$/g, '');
-  const priceMatch = raw.match(/(\d+(?:\.\d{1,2})?)/);
-  if (!priceMatch) return null;
+    .trim();
 
-  const price = Number(priceMatch[1]);
-  const name = raw.replace(priceMatch[0], '').replace(/\bfor\b/gi, '').trim();
-  if (!name || !price) return null;
+  const normalizeName = (value: string): string =>
+    value
+      .replace(/^["']+|["']+$/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .replace(/\b\w/g, (m) => m.toUpperCase());
 
-  return { name: name.replace(/\b\w/g, (m) => m.toUpperCase()), price };
+  const parseSegment = (segment: string): { name: string; price: number } | null => {
+    const stripped = segment.trim().replace(/\$/g, '');
+    if (!stripped) return null;
+
+    const match = stripped.match(/^(.*?)(?:\s+(?:for|at)\s+|:\s*|-\s*|\s+)(\d+(?:\.\d{1,2})?)$/i);
+    if (!match) return null;
+
+    const name = normalizeName(match[1].replace(/\b(for|at)\b$/i, '').trim());
+    const price = Number(match[2]);
+    if (!name || !Number.isFinite(price) || price <= 0) {
+      return null;
+    }
+
+    return { name, price };
+  };
+
+  const segments = cleaned
+    .split(/[,;\n]+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  const parsed = segments
+    .map(parseSegment)
+    .filter((service): service is { name: string; price: number } => Boolean(service));
+
+  if (parsed.length === 0) {
+    const single = parseSegment(cleaned);
+    if (!single) return null;
+    return { name: single.name, price: single.price, services: [single] };
+  }
+
+  return {
+    name: parsed[0].name,
+    price: parsed[0].price,
+    services: parsed,
+  };
 }
 
 function parseUpdateServiceHeuristic(message: string, services: string[]) {
@@ -232,7 +279,7 @@ function parseUpdateContactHeuristic(message: string) {
     return { field: 'phone', value: phoneMatch[1].replace(/[\s-]/g, '') };
   }
 
-  const addressMatch = message.match(/address\s+(?:to\s+)?(.+)/i);
+  const addressMatch = message.match(/address\s+(?:is\s+|to\s+)?(.+)/i);
   if (addressMatch) {
     return { field: 'address', value: addressMatch[1].trim() };
   }
@@ -275,15 +322,27 @@ function toolForIntent(intent: MutationIntent) {
     case 'add_service':
       return {
         name: 'add_service',
-        description: 'Add a new service with price.',
+        description: 'Add one or more new services with prices.',
         input_schema: {
           type: 'object',
           properties: {
             name: { type: 'string' },
             price: { type: 'number' },
             description: { type: 'string' },
+            services: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  name: { type: 'string' },
+                  price: { type: 'number' },
+                  description: { type: 'string' },
+                },
+                required: ['name', 'price'],
+              },
+            },
           },
-          required: ['name', 'price'],
+          required: [],
         },
       };
     case 'update_service':
@@ -479,8 +538,24 @@ export async function extractMutationEntities(
     return null;
   };
 
+  let cachedHeuristic: Record<string, any> | null | undefined;
+  const getHeuristic = async () => {
+    if (cachedHeuristic !== undefined) {
+      return cachedHeuristic;
+    }
+    cachedHeuristic = await fallbackHeuristic();
+    return cachedHeuristic;
+  };
+
+  if (intent === 'add_service') {
+    const heuristicAdd = await getHeuristic();
+    if (heuristicAdd && Array.isArray(heuristicAdd.services) && heuristicAdd.services.length > 1) {
+      data = heuristicAdd;
+    }
+  }
+
   if (!data) {
-    data = await fallbackHeuristic();
+    data = await getHeuristic();
   }
 
   if (!data) {
@@ -504,7 +579,7 @@ export async function extractMutationEntities(
 
   let normalized = validateExtractedData(intent, data);
   if (!normalized) {
-    const heuristicData = await fallbackHeuristic();
+    const heuristicData = await getHeuristic();
     if (heuristicData) {
       normalized = validateExtractedData(intent, heuristicData);
     }
@@ -528,10 +603,41 @@ export async function extractMutationEntities(
 
 function validateExtractedData(intent: MutationIntent, data: Record<string, any>): Record<string, any> | null {
   switch (intent) {
-    case 'add_service':
-      if (typeof data.name !== 'string' || !data.name.trim()) return null;
-      if (typeof data.price !== 'number' || Number.isNaN(data.price) || data.price <= 0) return null;
-      return { ...data, name: data.name.trim(), price: Number(data.price) };
+    case 'add_service': {
+      const rawServices = Array.isArray(data.services)
+        ? data.services
+        : data.name !== undefined || data.price !== undefined
+          ? [{ name: data.name, price: data.price, description: data.description }]
+          : [];
+
+      if (rawServices.length === 0) return null;
+
+      const services = rawServices
+        .map((service: Record<string, any>) => {
+          if (typeof service?.name !== 'string' || !service.name.trim()) return null;
+          const price = Number(service.price);
+          if (Number.isNaN(price) || price <= 0) return null;
+          const description =
+            typeof service.description === 'string' && service.description.trim().length > 0
+              ? service.description.trim()
+              : undefined;
+          return {
+            name: service.name.trim(),
+            price,
+            ...(description ? { description } : {}),
+          };
+        })
+        .filter((service): service is { name: string; price: number; description?: string } => Boolean(service));
+
+      if (services.length === 0) return null;
+
+      return {
+        ...data,
+        name: services[0].name,
+        price: services[0].price,
+        services,
+      };
+    }
     case 'update_service': {
       if (typeof data.serviceName !== 'string' || !data.serviceName.trim()) return null;
       const hasUpdate = data.newPrice !== undefined || data.newName !== undefined;

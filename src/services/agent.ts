@@ -192,14 +192,30 @@ async function executePendingAction(
   const data = pending.data;
 
   if (intent === 'add_service') {
-    const created = await addService(shop.id, {
-      name: data.name,
-      price: Number(data.price),
-      description: data.description,
-    });
+    const requestedServices = Array.isArray(data.services)
+      ? data.services
+      : [{ name: data.name, price: Number(data.price), description: data.description }];
+
+    const createdServices = [] as Array<{ name: string; price: string }>;
+
+    for (const service of requestedServices) {
+      const created = await addService(shop.id, {
+        name: service.name,
+        price: Number(service.price),
+        description: service.description,
+      });
+      createdServices.push({ name: created.name, price: created.price.toString() });
+    }
+
+    const response =
+      createdServices.length === 1
+        ? `Done! ${createdServices[0].name} ($${createdServices[0].price}) added to your menu.`
+        : `Done! Added ${createdServices.length} services: ${createdServices
+            .map((service) => `${service.name} ($${service.price})`)
+            .join(', ')}.`;
 
     return {
-      response: `Done! ${created.name} ($${created.price.toString()}) added to your menu.`,
+      response,
       state: { ...state, mode: 'active', pendingAction: undefined },
     };
   }

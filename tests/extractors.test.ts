@@ -23,6 +23,40 @@ test('extract add_service', async () => {
   }
 });
 
+test('extract add_service from compact price-tag format', async () => {
+  const result = await extractMutationEntities('add_service', 'HairColor:$30', context);
+  assert.equal(result.success, true);
+  if (result.success) {
+    assert.equal(result.data.name, 'HairColor');
+    assert.equal(result.data.price, 30);
+  }
+});
+
+
+test('extract add_service for multiple services in one message', async () => {
+  const result = await extractMutationEntities(
+    'add_service',
+    'Haircolor $30, Mens haircut $40, Womens haircut $50',
+    context,
+  );
+  assert.equal(result.success, true);
+  if (result.success) {
+    assert.ok(Array.isArray(result.data.services));
+    assert.equal(result.data.services.length, 3);
+    assert.deepEqual(
+      result.data.services.map((service: { name: string; price: number }) => ({
+        name: service.name,
+        price: service.price,
+      })),
+      [
+        { name: 'Haircolor', price: 30 },
+        { name: 'Mens Haircut', price: 40 },
+        { name: 'Womens Haircut', price: 50 },
+      ],
+    );
+  }
+});
+
 test('extract update_service with fuzzy service naming', async () => {
   const result = await extractMutationEntities('update_service', 'chg the fade to 35', context);
   assert.equal(result.success, true);
@@ -64,6 +98,15 @@ test('extract update_contact', async () => {
   assert.equal(result.success, true);
   if (result.success) {
     assert.equal(result.data.field, 'phone');
+  }
+});
+
+test('extract update_contact address strips leading is', async () => {
+  const result = await extractMutationEntities('update_contact', 'Our address is 123 Main Street, Springfield', context);
+  assert.equal(result.success, true);
+  if (result.success) {
+    assert.equal(result.data.field, 'address');
+    assert.equal(result.data.value, '123 Main Street, Springfield');
   }
 });
 

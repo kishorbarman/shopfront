@@ -335,3 +335,65 @@ test('delete website does not execute when second message does not exactly match
 
   await cleanupShop(phone);
 });
+
+test('update_contact address phrasing does not include leading "is" in stored value', async () => {
+  const phone = buildPhone();
+  await ensureShop(phone);
+
+  const response = await processMessage(
+    inbound(phone, 'Our address is 123 Main Street, Springfield'),
+  );
+  assert.match(response, /Updated! address is now 123 Main Street, Springfield\./i);
+
+  const shop = await prisma.shop.findUniqueOrThrow({ where: { phone } });
+  assert.equal(shop.address, '123 Main Street, Springfield');
+
+  await cleanupShop(phone);
+});
+
+test('bare service with price tag adds service without add verb', async () => {
+  const phone = buildPhone();
+  await ensureShop(phone);
+
+  const response = await processMessage(inbound(phone, 'HairColor $30'));
+  assert.match(response, /added to your menu/i);
+
+  const shop = await prisma.shop.findUniqueOrThrow({
+    where: { phone },
+    include: { services: true },
+  });
+  const added = shop.services.find((service) => service.name === 'HairColor');
+  assert.ok(added);
+  assert.equal(added?.price.toString(), '30');
+
+  await cleanupShop(phone);
+});
+
+
+test('multi-service list adds all services from one message', async () => {
+  const phone = buildPhone();
+  await ensureShop(phone);
+
+  const response = await processMessage(
+    inbound(phone, 'Haircolor $30, Mens haircut $40, Womens haircut $50'),
+  );
+  assert.match(response, /Added 3 services/i);
+
+  const shop = await prisma.shop.findUniqueOrThrow({
+    where: { phone },
+    include: { services: true },
+  });
+
+  const haircolor = shop.services.find((service) => service.name === 'Haircolor');
+  const mens = shop.services.find((service) => service.name === 'Mens Haircut');
+  const womens = shop.services.find((service) => service.name === 'Womens Haircut');
+
+  assert.ok(haircolor);
+  assert.ok(mens);
+  assert.ok(womens);
+  assert.equal(haircolor?.price.toString(), '30');
+  assert.equal(mens?.price.toString(), '40');
+  assert.equal(womens?.price.toString(), '50');
+
+  await cleanupShop(phone);
+});

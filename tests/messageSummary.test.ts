@@ -72,3 +72,27 @@ test('summarize cancellation when pending action is rejected', () => {
 
   assert.equal(summary, 'update_hours: cancelled');
 });
+
+
+test('summarize add_service with multiple services', () => {
+  const afterState = stateWithPending('add_service', {
+    services: [
+      { name: 'Haircolor', price: 30 },
+      { name: 'Mens Haircut', price: 40 },
+      { name: 'Womens Haircut', price: 50 },
+    ],
+  });
+
+  const summary = summarizeMessageAction({
+    messageBody: 'Haircolor $30, Mens haircut $40, Womens haircut $50',
+    beforeState: null,
+    afterState,
+    updateApplied: false,
+    status: 'PROCESSED',
+  });
+
+  assert.equal(
+    summary,
+    'add_service: adding 3 services: Haircolor ($30), Mens Haircut ($40), Womens Haircut ($50)',
+  );
+});

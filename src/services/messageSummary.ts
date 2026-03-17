@@ -76,8 +76,23 @@ function formatAction(intent: string, data: Record<string, any> | undefined): st
   const payload = data ?? {};
 
   switch (intent) {
-    case 'add_service':
-      return `adding ${payload.name ?? 'service'} at $${payload.price ?? '?'}`;
+    case 'add_service': {
+      const services = Array.isArray(payload.services)
+        ? payload.services
+        : payload.name !== undefined && payload.price !== undefined
+          ? [{ name: payload.name, price: payload.price }]
+          : [];
+      if (services.length === 0) {
+        return 'adding service';
+      }
+      if (services.length === 1) {
+        return `adding ${services[0].name ?? 'service'} at $${services[0].price ?? '?'}`;
+      }
+      const detail = services
+        .map((service: { name?: string; price?: number | string }) => `${service.name ?? 'service'} ($${service.price ?? '?'})`)
+        .join(', ');
+      return `adding ${services.length} services: ${detail}`;
+    }
     case 'update_service': {
       const name = payload.serviceName ?? 'service';
       const details: string[] = [];

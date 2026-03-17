@@ -23,6 +23,8 @@ const examplesByIntent: Record<IntentCategory, string[]> = {
     'Include beard color for 12',
     'Offer razor line up $15',
     'Add kids lineup 8',
+    'HairColor $30',
+    'Haircolor:$30',
   ],
   update_service: [
     'Change haircut to $28',
