@@ -16,7 +16,8 @@
       --accent: #8f2f1f;
       --accent-soft: #f4e1d1;
       --accent-text: #6e2418;
-      --bg: #f6f7f8;
+      --bg-top: #fff5ef;
+      --bg-bottom: #f8efe7;
       --text: #1d252d;
       --muted: #576373;
       --card: #ffffff;
@@ -28,7 +29,7 @@
     * { box-sizing: border-box; }
     body {
       margin: 0;
-      background: linear-gradient(180deg, #ffffff, var(--bg));
+      background: radial-gradient(circle at 10% 0%, #ffffff 0%, var(--bg-top) 48%, var(--bg-bottom) 100%);
       color: var(--text);
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       line-height: 1.45;
@@ -54,7 +55,27 @@
       object-fit: cover;
     }
     .hero-fallback {
-      background: linear-gradient(120deg, var(--accent), #ffffff 130%);
+      position: relative;
+      background: linear-gradient(120deg, #8f2f1f, #d29563);
+    }
+    .hero-art {
+      width: 100%;
+      height: 220px;
+      display: block;
+      object-fit: cover;
+    }
+    .hero-motif {
+      position: absolute;
+      left: 14px;
+      bottom: 12px;
+      display: inline-block;
+      padding: 7px 11px;
+      border-radius: 999px;
+      background: #ffffffd9;
+      color: var(--accent-text);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.01em;
     }
     .hero-content {
       padding: 14px;
@@ -82,6 +103,7 @@
       border: 1px solid var(--line);
       border-radius: 14px;
       padding: 14px;
+      box-shadow: 0 4px 14px #00000005;
     }
     .section h2 {
       margin: 0 0 10px;
@@ -95,14 +117,24 @@
       padding: 0;
     }
     .notice {
+      display: block;
       padding: 10px 12px;
       border-radius: 12px;
       font-weight: 600;
+      font-size: 15px;
+      line-height: 1.35;
       border: 1px solid transparent;
+      color: var(--text);
+      overflow-wrap: anywhere;
     }
-    .notice-info { background: color-mix(in srgb, var(--info) 24%, #fff 76%); border-color: var(--info); }
-    .notice-warning { background: color-mix(in srgb, var(--warn) 32%, #fff 68%); border-color: var(--warn); }
-    .notice-closure { background: color-mix(in srgb, var(--danger) 20%, #fff 80%); border-color: var(--danger); }
+    .notice-info { background: #e6f1ff; border-color: #85bbff; color: #153f64; }
+    .notice-warning { background: #fff2cf; border-color: #e5b84a; color: #5f4612; }
+    .notice-closure { background: #fde8e6; border-color: #d94b41; color: #7a211b; }
+    @supports (color: color-mix(in srgb, black 50%, white 50%)) {
+      .notice-info { background: color-mix(in srgb, var(--info) 24%, #fff 76%); border-color: var(--info); color: #153f64; }
+      .notice-warning { background: color-mix(in srgb, var(--warn) 32%, #fff 68%); border-color: var(--warn); color: #5f4612; }
+      .notice-closure { background: color-mix(in srgb, var(--danger) 20%, #fff 80%); border-color: var(--danger); color: #7a211b; }
+    }
     .service-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
     .service-list li { border-bottom: 1px dashed var(--line); padding-bottom: 10px; }
     .service-list li:last-child { border-bottom: 0; padding-bottom: 0; }
@@ -172,6 +204,36 @@
       font-size: 13px;
     }
 
+    .logs-disclosure {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fff;
+      padding: 0;
+    }
+    .logs-disclosure > summary {
+      list-style: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 14px 14px;
+      font-weight: 800;
+      font-size: 20px;
+      color: var(--text);
+    }
+    .logs-disclosure > summary::-webkit-details-marker { display: none; }
+    .logs-hint {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--muted);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 3px 8px;
+    }
+    .logs-disclosure[open] > summary { border-bottom: 1px solid var(--line); }
+    .logs-disclosure > .logs-list,
+    .logs-disclosure > .empty { padding: 12px 14px 14px; }
     .logs-list { display: grid; gap: 10px; }
     .log-item {
       border: 1px solid var(--line);
@@ -218,7 +280,28 @@
 <body>
   <main class="page">
     <header class="hero">
-      <div class="hero-fallback" aria-hidden="true"></div>
+      <div class="hero-fallback" aria-hidden="true">
+    <svg class="hero-art" viewBox="0 0 640 300" preserveAspectRatio="xMidYMid slice">
+      <defs>
+        <linearGradient id="heroGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#8f2f1f" />
+          <stop offset="100%" stop-color="#d29563" />
+        </linearGradient>
+      </defs>
+      <rect x="0" y="0" width="640" height="300" fill="url(#heroGradient)" />
+      <circle cx="150" cy="90" r="84" fill="#ffffff22" />
+      <circle cx="540" cy="220" r="120" fill="#ffffff1a" />
+      <circle cx="320" cy="150" r="62" fill="#ffffff1f" />
+      <g fill="none" stroke="#ffffff" stroke-width="8" stroke-linecap="round">
+      <line x1="296" y1="120" x2="296" y2="176" />
+      <line x1="284" y1="120" x2="284" y2="145" />
+      <line x1="308" y1="120" x2="308" y2="145" />
+      <line x1="344" y1="120" x2="336" y2="176" />
+      <path d="M336 120 C352 122 352 145 336 148" />
+    </g>
+    </svg>
+    <div class="hero-motif">Fresh Menu and Daily Specials</div>
+  </div>
       <div class="hero-content">
         <span class="badge">Restaurant</span>
         <h1>Sunset Tacos</h1>
@@ -248,10 +331,10 @@
 
     <section class="section" aria-label="Hours">
       <h2>Hours</h2>
-      <table class="hours-table"><tbody><tr class="today">
+      <table class="hours-table"><tbody><tr class="">
         <th>Sunday</th>
         <td class="closed">Closed</td>
-      </tr><tr class="">
+      </tr><tr class="today">
         <th>Monday</th>
         <td class="">09:00 - 19:00</td>
       </tr><tr class="">
@@ -286,7 +369,7 @@
       </div>
     </section>
 
-    <section class="section" aria-label="Logs"><h2>Logs</h2><p class="empty">No message history yet.</p></section>
+    <section class="section" aria-label="Logs"><details class="logs-disclosure"><summary>Logs <span class="logs-hint">Expand</span></summary><p class="empty">No message history yet.</p></details></section>
 
     <footer class="footer">Powered by Shopfront</footer>
   </main>

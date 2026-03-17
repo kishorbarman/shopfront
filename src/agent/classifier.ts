@@ -6,7 +6,6 @@ interface ClassifierOptions {
   hasMedia?: boolean;
 }
 
-
 function safeJsonParse<T>(text: string): T | null {
   try {
     return JSON.parse(text) as T;
@@ -61,6 +60,20 @@ function buildSystemPrompt(shopContext: { name: string; services: string[] }): s
   ].join('\n');
 }
 
+function looksLikeRegularHoursUpdate(text: string): boolean {
+  const hasDayMention = /(sunday|sun|monday|mon|tuesday|tue|wednesday|wed|thursday|thu|friday|fri|saturday|sat)/.test(text);
+  const hasHoursCue = /(hours?|schedule|open|opened|close|closed|closing|opening)/.test(text);
+
+  if (!hasDayMention || !hasHoursCue) {
+    return false;
+  }
+
+  const hasTemporaryCue =
+    /(vacation|temporary|temporarily|temp closed|closed next|next week|next month|tomorrow|today|this weekend|holiday|for\s+\d+\s+days|until|through|only\b)/.test(text);
+
+  return !hasTemporaryCue;
+}
+
 function classifyHeuristically(
   message: string,
   shopContext: { name: string; services: string[] },
@@ -103,6 +116,10 @@ function classifyHeuristically(
     return { intent: 'add_notice', confidence: 0.85, needsClarification: false };
   }
 
+  if (looksLikeRegularHoursUpdate(text)) {
+    return { intent: 'update_hours', confidence: 0.86, needsClarification: false };
+  }
+
   if (/(vacation|closed next|closed on|temp closed|temporarily closed)/.test(text)) {
     return { intent: 'temp_closure', confidence: 0.85, needsClarification: false };
   }
@@ -143,6 +160,22 @@ function classifyHeuristically(
   };
 }
 
+function applyHoursOverride(message: string, result: ClassificationResult): ClassificationResult {
+  const text = message.toLowerCase().trim();
+
+  if (looksLikeRegularHoursUpdate(text) && result.intent === 'temp_closure') {
+    return {
+      ...result,
+      intent: 'update_hours',
+      confidence: Math.max(result.confidence, 0.86),
+      needsClarification: false,
+      clarificationQuestion: undefined,
+    };
+  }
+
+  return result;
+}
+
 export async function classifyIntent(
   message: string,
   shopContext: { name: string; services: string[] },
@@ -178,17 +211,19 @@ export async function classifyIntent(
       };
     }
 
-    if (parsed.confidence < 0.7) {
+    const withOverride = applyHoursOverride(message, parsed);
+
+    if (withOverride.confidence < 0.7) {
       return {
-        ...parsed,
+        ...withOverride,
         needsClarification: true,
         clarificationQuestion:
-          parsed.clarificationQuestion ??
+          withOverride.clarificationQuestion ??
           'I can help with services, hours, notices, and photos. What should I update?',
       };
     }
 
-    return parsed;
+    return withOverride;
   } catch (error) {
     const typedError = error instanceof Error ? error : new Error(String(error));
     logger.error({ event: 'error', type: typedError.name, message: typedError.message, stack: typedError.stack }, 'Intent classification failed');

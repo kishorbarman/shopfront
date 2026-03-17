@@ -597,14 +597,24 @@ export async function generateShopPage(shop: ShopPageData): Promise<string> {
       padding: 0;
     }
     .notice {
+      display: block;
       padding: 10px 12px;
       border-radius: 12px;
       font-weight: 600;
+      font-size: 15px;
+      line-height: 1.35;
       border: 1px solid transparent;
+      color: var(--text);
+      overflow-wrap: anywhere;
     }
-    .notice-info { background: color-mix(in srgb, var(--info) 24%, #fff 76%); border-color: var(--info); }
-    .notice-warning { background: color-mix(in srgb, var(--warn) 32%, #fff 68%); border-color: var(--warn); }
-    .notice-closure { background: color-mix(in srgb, var(--danger) 20%, #fff 80%); border-color: var(--danger); }
+    .notice-info { background: #e6f1ff; border-color: #85bbff; color: #153f64; }
+    .notice-warning { background: #fff2cf; border-color: #e5b84a; color: #5f4612; }
+    .notice-closure { background: #fde8e6; border-color: #d94b41; color: #7a211b; }
+    @supports (color: color-mix(in srgb, black 50%, white 50%)) {
+      .notice-info { background: color-mix(in srgb, var(--info) 24%, #fff 76%); border-color: var(--info); color: #153f64; }
+      .notice-warning { background: color-mix(in srgb, var(--warn) 32%, #fff 68%); border-color: var(--warn); color: #5f4612; }
+      .notice-closure { background: color-mix(in srgb, var(--danger) 20%, #fff 80%); border-color: var(--danger); color: #7a211b; }
+    }
     .service-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
     .service-list li { border-bottom: 1px dashed var(--line); padding-bottom: 10px; }
     .service-list li:last-child { border-bottom: 0; padding-bottom: 0; }

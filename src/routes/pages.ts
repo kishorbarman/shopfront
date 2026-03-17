@@ -78,7 +78,7 @@ const pagesRoutes: FastifyPluginAsync = async (fastify) => {
     const payloadBytes = Buffer.byteLength(html, 'utf8');
 
     reply
-      .header('Cache-Control', 'public, max-age=300')
+      .header('Cache-Control', 'public, max-age=0, must-revalidate')
       .header('Last-Modified', shopMeta.updatedAt.toUTCString())
       .header('ETag', buildEtag(shopMeta.updatedAt, payloadBytes))
       .type('text/html; charset=utf-8')

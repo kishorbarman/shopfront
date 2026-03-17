@@ -44,6 +44,7 @@ const examplesByIntent: Record<IntentCategory, string[]> = {
     'Close at 7 tonight',
     'Opening at 11 tomorrow',
     'Update Sunday hours to 9-2',
+    'Update hours we are closed on Sunday',
   ],
   temp_closure: [
     'Closed next Monday',
@@ -133,5 +134,12 @@ test('classifier forces update_photo when media + photo phrasing are present', a
   });
 
   assert.equal(result.intent, 'update_photo');
+  assert.equal(result.needsClarification, false);
+});
+
+test('classifier prefers update_hours over temp_closure for regular weekly schedule edits', async () => {
+  const result = await classifyIntent('Update hours we are closed on Sunday', context, history);
+
+  assert.equal(result.intent, 'update_hours');
   assert.equal(result.needsClarification, false);
 });

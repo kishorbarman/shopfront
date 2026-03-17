@@ -268,3 +268,28 @@ test('photo without context asks banner/gallery and gallery choice is applied', 
   await fs.rm(path.dirname(imagePath), { recursive: true, force: true });
   await cleanupShop(phone);
 });
+
+test('hours update phrasing does not create temp closure notice', async () => {
+  const phone = buildPhone();
+  await ensureShop(phone);
+
+  const shop = await prisma.shop.findUniqueOrThrow({ where: { phone } });
+  await prisma.hour.updateMany({
+    where: { shopId: shop.id, dayOfWeek: 0 },
+    data: { isClosed: false, openTime: '09:00', closeTime: '17:00' },
+  });
+
+  const noticesBefore = await prisma.notice.count({ where: { shopId: shop.id } });
+  const response = await processMessage(inbound(phone, 'Update hours we are closed on Sunday'));
+  assert.match(response, /Updated! Hours changed:/i);
+
+  const sunday = await prisma.hour.findFirstOrThrow({
+    where: { shopId: shop.id, dayOfWeek: 0 },
+  });
+  assert.equal(sunday.isClosed, true);
+
+  const noticesAfter = await prisma.notice.count({ where: { shopId: shop.id } });
+  assert.equal(noticesAfter, noticesBefore);
+
+  await cleanupShop(phone);
+});
