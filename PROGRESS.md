@@ -644,3 +644,79 @@ Production verification completed (March 14-15, 2026):
 
 Notes:
 - For Railway production, `SITE_OUTPUT_DIR` should be set to a writable path (recommended: `/tmp/sites`).
+
+## Telegram Channel Expansion (New)
+
+### Phase 1 - Telegram Domain Model & Config (Completed)
+
+Implemented:
+- Extended channel model to include Telegram in `src/models/types.ts`.
+- Extended inbound message model with external identity fields:
+  - `externalUserId`
+  - `externalSpaceId`
+  - `rawPayload`
+- Added Telegram environment variables in `.env.example`:
+  - `ENABLE_TELEGRAM`
+  - `TELEGRAM_BOT_TOKEN`
+  - `TELEGRAM_WEBHOOK_SECRET`
+  - `TELEGRAM_BOT_USERNAME`
+  - `SKIP_TELEGRAM_VALIDATION`
+- Added fail-fast config validation in `src/config.ts` for Telegram-enabled deployments.
+
+Verification completed:
+- `npm run build` passed.
+- `tests/config-telegram.test.ts` passed:
+  - Telegram vars not required when disabled.
+  - Telegram vars required when enabled.
+  - Validation skip behavior works as expected.
+
+### Phase 2 - Telegram Inbound Webhook (Completed)
+
+Implemented:
+- Added Telegram auth/parser utility in `src/lib/telegramAuth.ts`:
+  - request secret validation
+  - payload normalization
+  - idempotency key generation
+- Added Telegram webhook endpoint in `src/routes/webhook.ts`:
+  - `POST /api/webhook/telegram`
+- Added request validation using header:
+  - `X-Telegram-Bot-Api-Secret-Token`
+- Added deduplication guard via Redis key per `update_id`.
+- Normalized Telegram events into unified `InboundMessage` and routed through existing `processMessage()` pipeline.
+
+Verification completed:
+- `tests/telegramAuth.test.ts` passed.
+- Production manual check passed:
+  - webhook receives Telegram requests (`/api/webhook/telegram`)
+  - `message_received` logs show `channel=telegram`
+  - request validation and idempotency behavior confirmed.
+
+### Phase 3 - Telegram Outbound Sender (Completed)
+
+Implemented:
+- Added Telegram sender service in `src/services/telegramMessaging.ts`:
+  - `sendMessage` path (`sendMessage` Telegram API)
+  - media path (`sendPhoto` when `mediaUrl` is provided)
+  - robust API error handling and `MessagingError` wrapping
+  - structured outbound logging with channel/recipient/body metadata
+- Refactored `src/services/messaging.ts` routing:
+  - `telegram` -> Telegram sender
+  - `sms`/`whatsapp` -> existing Twilio path unchanged
+- Updated Telegram webhook flow in `src/routes/webhook.ts` to send real outbound replies via `sendMessage()`.
+
+Verification completed:
+- `npm run build` passed.
+- `tests/telegramMessaging.test.ts` passed:
+  - text send path
+  - photo send path
+  - non-2xx error handling
+  - channel routing through `sendMessage()`
+- Combined Telegram test suite passed:
+  - `tests/config-telegram.test.ts`
+  - `tests/telegramAuth.test.ts`
+  - `tests/telegramMessaging.test.ts`
+
+Current Telegram status:
+- Inbound webhook: working in production.
+- Outbound Telegram responses: implemented and enabled.
+- End-to-end Telegram conversation path is now active (subject to bot webhook/env configuration).

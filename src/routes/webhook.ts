@@ -510,7 +510,37 @@ async function handleTelegramInbound(
     'Telegram response generated',
   );
 
-  // TODO: Send Telegram outbound response in Phase 3 via Telegram adapter.
+  try {
+    await sendMessage({
+      to: message.externalSpaceId ?? message.externalUserId ?? message.from,
+      body: responseText,
+      channel: 'telegram',
+    });
+  } catch (error) {
+    const typedError = error instanceof Error ? error : new Error(String(error));
+    reportError(typedError, {
+      tags: {
+        channel: message.channel,
+      },
+      extra: {
+        phone: message.from,
+        telegramUpdateId: parsedUpdate.updateId,
+      },
+    });
+
+    logger.error(
+      {
+        event: 'error',
+        type: typedError.name,
+        phone: message.from,
+        messageId: message.id,
+        message: typedError.message,
+        stack: typedError.stack,
+      },
+      'Failed to send Telegram reply message',
+    );
+  }
+
   telegramOkResponse(reply);
 }
 

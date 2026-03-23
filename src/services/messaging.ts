@@ -4,6 +4,7 @@ import type { Channel } from '../models/types';
 import config from '../config';
 import { MessagingError } from '../lib/errors';
 import logger from '../lib/logger';
+import { sendTelegramMessage } from './telegramMessaging';
 
 export interface OutboundMessage {
   to: string;
@@ -18,16 +19,7 @@ function normalizePhoneNumber(phone: string): string {
 
 function channelPhoneNumber(phone: string, channel: Channel): string {
   const normalized = normalizePhoneNumber(phone);
-
-  if (channel === 'whatsapp') {
-    return `whatsapp:${normalized}`;
-  }
-
-  if (channel === 'sms') {
-    return normalized;
-  }
-
-  throw new MessagingError('Telegram outbound messaging is not implemented yet.');
+  return channel === 'whatsapp' ? `whatsapp:${normalized}` : normalized;
 }
 
 function getTwilioClient() {
@@ -56,60 +48,70 @@ function getFromNumber(channel: Channel): string {
     return channelPhoneNumber(config.TWILIO_SMS_NUMBER, channel);
   }
 
-  throw new MessagingError('Telegram outbound messaging is not implemented yet.');
+  throw new MessagingError(`Unsupported Twilio channel: ${channel}`);
+}
+
+async function sendTwilioMessage(message: OutboundMessage): Promise<string> {
+  if (config.SKIP_TWILIO_SEND) {
+    const mockSid = `MOCK_${Date.now()}`;
+    logger.info(
+      {
+        event: 'message_sent',
+        id: mockSid,
+        phone: message.to,
+        channel: message.channel,
+        bodyLength: message.body.length,
+        hasMedia: Boolean(message.mediaUrl),
+        skipped: true,
+      },
+      'Outbound message send skipped',
+    );
+    return mockSid;
+  }
+
+  const client = getTwilioClient();
+
+  const response = await client.messages.create({
+    to: channelPhoneNumber(message.to, message.channel),
+    from: getFromNumber(message.channel),
+    body: message.body,
+    mediaUrl: message.mediaUrl ? [message.mediaUrl] : undefined,
+  });
+
+  logger.info(
+    {
+      event: 'message_sent',
+      id: response.sid,
+      phone: message.to,
+      channel: message.channel,
+      bodyLength: message.body.length,
+      hasMedia: Boolean(message.mediaUrl),
+    },
+    'Outbound message sent',
+  );
+
+  return response.sid;
 }
 
 export async function sendMessage(message: OutboundMessage): Promise<string> {
   try {
     if (message.channel === 'telegram') {
-      throw new MessagingError('Telegram outbound messaging is not implemented yet.');
+      return await sendTelegramMessage({
+        chatId: message.to,
+        text: message.body,
+        mediaUrl: message.mediaUrl,
+      });
     }
 
-    if (config.SKIP_TWILIO_SEND) {
-      const mockSid = `MOCK_${Date.now()}`;
-      logger.info(
-        {
-          event: 'message_sent',
-          id: mockSid,
-          phone: message.to,
-          channel: message.channel,
-          bodyLength: message.body.length,
-          hasMedia: Boolean(message.mediaUrl),
-          skipped: true,
-        },
-        'Outbound message send skipped',
-      );
-      return mockSid;
-    }
-
-    const client = getTwilioClient();
-
-    const response = await client.messages.create({
-      to: channelPhoneNumber(message.to, message.channel),
-      from: getFromNumber(message.channel),
-      body: message.body,
-      mediaUrl: message.mediaUrl ? [message.mediaUrl] : undefined,
-    });
-
-    logger.info(
-      {
-        event: 'message_sent',
-        id: response.sid,
-        phone: message.to,
-        channel: message.channel,
-        bodyLength: message.body.length,
-        hasMedia: Boolean(message.mediaUrl),
-      },
-      'Outbound message sent',
-    );
-
-    return response.sid;
+    return await sendTwilioMessage(message);
   } catch (error) {
     const typedError = error instanceof Error ? error : new Error(String(error));
     logger.error(
       {
         event: 'error',
         type: 'MessagingError',
+        channel: message.channel,
+        phone: message.to,
         message: typedError.message,
         stack: typedError.stack,
       },
@@ -118,6 +120,6 @@ export async function sendMessage(message: OutboundMessage): Promise<string> {
 
     throw typedError instanceof MessagingError
       ? typedError
-      : new MessagingError(`Twilio send failed: ${typedError.message}`);
+      : new MessagingError(`Send failed (${message.channel}): ${typedError.message}`);
   }
 }

@@ -1,7 +1,26 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { createRequire } from 'node:module';
 
-import { loadConfig } from '../src/config';
+const require = createRequire(import.meta.url);
+
+process.env.NODE_ENV = process.env.NODE_ENV || 'development';
+process.env.PORT = process.env.PORT || '3000';
+process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgresql://user:pass@localhost:5432/shopfront?schema=public';
+process.env.REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
+process.env.TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || 'ACxxxxxxxx';
+process.env.TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || 'twilio-token';
+process.env.TWILIO_SMS_NUMBER = process.env.TWILIO_SMS_NUMBER || '+15550000001';
+process.env.TWILIO_WHATSAPP_NUMBER = process.env.TWILIO_WHATSAPP_NUMBER || '+15550000002';
+process.env.GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'gemini-key';
+process.env.SENTRY_DSN = process.env.SENTRY_DSN || 'https://public@sentry.io/1';
+process.env.BASE_URL = process.env.BASE_URL || 'https://example.com';
+
+function loadConfigModule() {
+  const modulePath = require.resolve('../src/config');
+  delete require.cache[modulePath];
+  return require('../src/config') as { loadConfig: (env?: NodeJS.ProcessEnv) => unknown };
+}
 
 function baseEnv(): NodeJS.ProcessEnv {
   return {
@@ -26,7 +45,8 @@ function baseEnv(): NodeJS.ProcessEnv {
 }
 
 test('loadConfig does not require telegram vars when telegram is disabled', () => {
-  const config = loadConfig(baseEnv());
+  const { loadConfig } = loadConfigModule();
+  const config = loadConfig(baseEnv()) as Record<string, unknown>;
   assert.equal(config.ENABLE_TELEGRAM, false);
   assert.equal(config.TELEGRAM_BOT_TOKEN, '');
   assert.equal(config.TELEGRAM_WEBHOOK_SECRET, '');
@@ -34,6 +54,7 @@ test('loadConfig does not require telegram vars when telegram is disabled', () =
 });
 
 test('loadConfig requires telegram vars when telegram is enabled', () => {
+  const { loadConfig } = loadConfigModule();
   const env = {
     ...baseEnv(),
     ENABLE_TELEGRAM: 'true',
@@ -46,6 +67,7 @@ test('loadConfig requires telegram vars when telegram is enabled', () => {
 });
 
 test('loadConfig allows missing telegram secret only when skip validation is true', () => {
+  const { loadConfig } = loadConfigModule();
   const env = {
     ...baseEnv(),
     ENABLE_TELEGRAM: 'true',
@@ -54,13 +76,14 @@ test('loadConfig allows missing telegram secret only when skip validation is tru
     TELEGRAM_BOT_USERNAME: 'shopfront_bot',
   };
 
-  const config = loadConfig(env);
+  const config = loadConfig(env) as Record<string, unknown>;
   assert.equal(config.ENABLE_TELEGRAM, true);
   assert.equal(config.SKIP_TELEGRAM_VALIDATION, true);
   assert.equal(config.TELEGRAM_WEBHOOK_SECRET, '');
 });
 
 test('loadConfig accepts telegram vars when enabled', () => {
+  const { loadConfig } = loadConfigModule();
   const env = {
     ...baseEnv(),
     ENABLE_TELEGRAM: 'true',
@@ -69,7 +92,7 @@ test('loadConfig accepts telegram vars when enabled', () => {
     TELEGRAM_BOT_USERNAME: 'shopfront_bot',
   };
 
-  const config = loadConfig(env);
+  const config = loadConfig(env) as Record<string, unknown>;
   assert.equal(config.ENABLE_TELEGRAM, true);
   assert.equal(config.TELEGRAM_BOT_TOKEN, 'telegram-token');
   assert.equal(config.TELEGRAM_WEBHOOK_SECRET, 'secret-token');
