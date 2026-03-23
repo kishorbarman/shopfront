@@ -26,7 +26,7 @@ const RATE_LIMIT_TTL_SECONDS = 60 * 60;
 const RATE_LIMIT_BY_CHANNEL: Record<Channel, number> = {
   sms: 20,
   whatsapp: 20,
-  telegram: 60,
+  telegram: 100,
 };
 
 const SPAM_WINDOW_SECONDS = 30;

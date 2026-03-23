@@ -107,14 +107,14 @@ test('checkRateLimit enforces SMS at 20 per hour', async () => {
 });
 
 test('checkRateLimit allows a higher Telegram threshold', async () => {
-  let result = { allowed: true, remaining: 60, limit: 60, count: 0 };
+  let result = { allowed: true, remaining: 100, limit: 100, count: 0 };
 
-  for (let i = 1; i <= 60; i += 1) {
+  for (let i = 1; i <= 100; i += 1) {
     result = await checkRateLimit(phone, 'telegram');
   }
 
   assert.equal(result.allowed, true);
-  assert.equal(result.limit, 60);
+  assert.equal(result.limit, 100);
   assert.equal(result.remaining, 0);
 
   const blocked = await checkRateLimit(phone, 'telegram');
