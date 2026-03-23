@@ -298,6 +298,16 @@ test('delete website requires exact same message repeated and then purges data',
   const phone = buildPhone();
   await ensureShop(phone);
 
+  const seededShop = await prisma.shop.findUniqueOrThrow({ where: { phone } });
+  await prisma.channelIdentity.create({
+    data: {
+      shopId: seededShop.id,
+      channel: 'telegram',
+      externalUserId: 'tg-' + phone,
+      externalSpaceId: 'tg-' + phone,
+    },
+  });
+
   const first = await processMessage(inbound(phone, 'delete my website'));
   assert.match(first, /repeat this exact message/i);
 
@@ -309,6 +319,9 @@ test('delete website requires exact same message repeated and then purges data',
 
   const afterDelete = await prisma.shop.findUnique({ where: { phone } });
   assert.equal(afterDelete, null);
+
+  const identityCount = await prisma.channelIdentity.count({ where: { shopId: seededShop.id } });
+  assert.equal(identityCount, 0);
 
   const state = await getState(phone);
   assert.equal(state, null);

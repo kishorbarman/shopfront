@@ -411,6 +411,7 @@ export async function deleteWebsiteAndData(shop: { id: string; phone: string; sl
       await tx.notice.deleteMany({ where: { shopId: shop.id } });
       await tx.messageLog.deleteMany({ where: { OR: [{ shopId: shop.id }, { phone: shop.phone }] } });
       await tx.failedMessage.deleteMany({ where: { phone: shop.phone } });
+      await tx.channelIdentity.deleteMany({ where: { shopId: shop.id } });
       await tx.shop.delete({ where: { id: shop.id } });
     });
 
