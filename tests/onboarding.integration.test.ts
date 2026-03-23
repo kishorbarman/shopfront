@@ -202,3 +202,15 @@ test('placeholder service is retired when first real service is added', async ()
 
   await clearShopDataByPhone(phone);
 });
+
+test('first onboarding message can be business name directly', async () => {
+  const phone = buildPhone();
+
+  const r1 = await processMessage(inbound(phone, 'Luna Studio'));
+  assert.match(r1, /What kind of business is Luna Studio/i);
+
+  const r2 = await processMessage(inbound(phone, 'Salon'));
+  assert.match(r2, /List your services and prices/i);
+
+  await clearShopDataByPhone(phone);
+});

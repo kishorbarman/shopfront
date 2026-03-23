@@ -241,16 +241,33 @@ export async function runOnboarding(
   const draft = getDraft(state);
 
   if (!state.onboardingStep) {
+    const name = await parseBusinessName(message.body);
+    if (!name) {
+      return {
+        response: WELCOME_MESSAGE,
+        state: withDraft(
+          {
+            ...state,
+            mode: 'onboarding',
+            onboardingStep: 1,
+            lastMessageAt: new Date().toISOString(),
+          },
+          draft,
+        ),
+      };
+    }
+
+    const updatedDraft = { ...draft, name };
     return {
-      response: WELCOME_MESSAGE,
+      response: `What kind of business is ${name} - barber, salon, restaurant, or something else?`,
       state: withDraft(
         {
           ...state,
           mode: 'onboarding',
-          onboardingStep: 1,
+          onboardingStep: 2,
           lastMessageAt: new Date().toISOString(),
         },
-        draft,
+        updatedDraft,
       ),
     };
   }

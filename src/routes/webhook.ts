@@ -153,7 +153,7 @@ async function handleTelegramCommand(
       }
     }
 
-    return 'Welcome to Shopfront on Telegram. To start fresh, tell me your business name. If your shop already exists, send /link YOURCODE to connect this Telegram account.';
+    return 'Welcome to Shopfront on Telegram! Tell me your business name to create your page, or send /link YOURCODE to connect an existing shop.';
   }
 
   if (command.command === 'help') {
