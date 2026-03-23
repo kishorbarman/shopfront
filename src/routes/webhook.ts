@@ -607,6 +607,24 @@ async function handleTelegramInbound(
     rawPayload: request.body,
   };
 
+  const parsedCommand = parseTelegramLinkCommand(message.body);
+  if (parsedCommand?.command === 'start') {
+    const startKey = 'telegram:start:' + message.externalUserId;
+    const firstStart = await redis.set(startKey, message.id, 'EX', 10, 'NX');
+    if (firstStart !== 'OK') {
+      logger.info(
+        {
+          event: 'telegram_duplicate_start_suppressed',
+          updateId: parsedUpdate.updateId,
+          externalUserId: message.externalUserId,
+        },
+        'Duplicate /start command suppressed',
+      );
+      telegramOkResponse(reply, { ok: true, duplicate: true });
+      return;
+    }
+  }
+
   logger.info(
     {
       event: 'message_received',
