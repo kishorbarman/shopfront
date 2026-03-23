@@ -826,3 +826,34 @@ Validation completed:
 
 Environment note:
 - Local DB migration history still has drift in this machine's dev DB; tests include safety table-creation for `ChannelIdentity` when absent, but repository migration files remain the source of truth.
+
+### Phase 6 - Testing & Regression Coverage (Completed)
+Date: 2026-03-22
+
+What was added/fixed:
+- Added Telegram webhook integration test for unsupported update payload handling:
+  - `tests/telegram-webhook.integration.test.ts`
+- Added full Telegram onboarding + post-onboarding mutation integration test:
+  - `tests/telegram-onboarding.integration.test.ts`
+- Added parsed-intent fallback logging in webhook processing paths so message logs retain intent/summaries more consistently.
+- Fixed flaky Telegram integration runs caused by shared Redis DB state across parallel files:
+  - `tests/telegram-webhook.integration.test.ts` now uses Redis DB `12`
+  - `tests/telegram-onboarding.integration.test.ts` now uses Redis DB `13`
+  - `tests/telegram-phase5.integration.test.ts` now uses Redis DB `14`
+
+Validation completed:
+- `npm run build` passed.
+- Telegram tests (all in one parallel run) passed:
+  - `tests/telegramAuth.test.ts`
+  - `tests/telegramMessaging.test.ts`
+  - `tests/telegramLinking.test.ts`
+  - `tests/telegram-webhook.integration.test.ts`
+  - `tests/telegram-phase5.integration.test.ts`
+  - `tests/telegram-onboarding.integration.test.ts`
+- Regression checks for existing SMS/WhatsApp agent flows passed (run with `NODE_ENV=development` in command env):
+  - `tests/onboarding.integration.test.ts`
+  - `tests/agent-existing-shop.integration.test.ts`
+  - `tests/prompt-behavior.integration.test.ts`
+
+Notes:
+- Some legacy integration tests import app modules before top-level env assignment executes under ESM. Running those tests with `NODE_ENV=development` in the command environment is currently required for stable local execution.

@@ -13,7 +13,7 @@ function applyEnv(): void {
   process.env.PORT = process.env.PORT || '3000';
   process.env.DATABASE_URL =
     process.env.DATABASE_URL || 'postgresql://shopfront:shopfront@localhost:5432/shopfront?schema=public';
-  process.env.REDIS_URL = 'redis://127.0.0.1:6379/15';
+  process.env.REDIS_URL = 'redis://127.0.0.1:6379/14';
   process.env.TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || 'ACxxxxxxxx';
   process.env.TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || 'twilio-token';
   process.env.TWILIO_SMS_NUMBER = process.env.TWILIO_SMS_NUMBER || '+15550000001';
