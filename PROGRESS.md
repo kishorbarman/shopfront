@@ -789,3 +789,40 @@ Validation completed:
 
 Known environment note:
 - Local `prisma migrate dev` reports migration drift in the local DB state; code and migration files are present, but local DB history needs reconciliation/reset before applying migrations on this machine.
+
+### Phase 5 - Agent Pipeline Integration (Telegram) (Completed)
+
+Goal completed:
+- Telegram messages now run through the same classify/extract/execute pipeline used by SMS/WhatsApp.
+
+Implementation updates:
+- Shop resolution order in `processMessage()` now supports external identity lookup first for Telegram:
+  - Lookup by `channel=telegram + externalUserId` via `ChannelIdentity`
+  - Fallback to phone-based lookup for other channels
+- Reused the existing mutation/query pipeline unchanged where possible (classifier, extractors, router, shopUpdater).
+- Conversation state/history keying for Telegram remains stable using `from = telegram:{externalUserId}`.
+- Ensured Telegram-originated updates execute normal mutation handlers and site rebuild pipeline.
+- Added parsed-intent fallback inference in webhook logging so Telegram message logs consistently include `parsedIntent` and `parsedSummary` when state-based intent is not available.
+
+Validation completed:
+- Build + lint:
+  - `npm run build` passed
+  - `npm run lint` passed
+- Telegram test suite passed:
+  - `tests/config-telegram.test.ts`
+  - `tests/telegramAuth.test.ts`
+  - `tests/telegramMessaging.test.ts`
+  - `tests/telegramLinking.test.ts`
+  - `tests/telegram-phase5.integration.test.ts`
+- End-to-end Telegram integration validation (`tests/telegram-phase5.integration.test.ts`) verified:
+  - Telegram webhook updates DB records (`update_service` on Haircut to $44)
+  - Site rebuild generated updated HTML at `/public/sites/{slug}/index.html`
+  - Conversation state/history persisted for `telegram:{externalUserId}`
+  - Message log row created with:
+    - `channel=telegram`
+    - `status=PROCESSED`
+    - `updateApplied=true`
+    - non-empty `parsedIntent` and `parsedSummary`
+
+Environment note:
+- Local DB migration history still has drift in this machine's dev DB; tests include safety table-creation for `ChannelIdentity` when absent, but repository migration files remain the source of truth.

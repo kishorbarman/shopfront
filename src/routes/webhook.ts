@@ -205,6 +205,37 @@ function pickIntent(beforeState: ConversationState | null, afterState: Conversat
   return afterState?.pendingAction?.intent ?? beforeState?.pendingAction?.intent ?? undefined;
 }
 
+function inferIntentFromMessage(message: InboundMessage, responseText: string): string | undefined {
+  const body = message.body.toLowerCase();
+  const response = responseText.toLowerCase();
+
+  if (/\bhelp\b/.test(body)) return 'help';
+  if (/^(hi|hello|hey|yo)\b/.test(body.trim())) return 'greeting';
+
+  if (/(banner|photo|image|gallery|profile)/.test(body)) return 'update_photo';
+  if (/(what|show)\b/.test(body) || response.includes('currently') || response.includes('your current hours')) return 'query';
+
+  if (/\b(remove|delete)\b/.test(body) && /notice/.test(body)) return 'remove_notice';
+  if (/\b(notice|announce|announcement|sign)\b/.test(body)) return 'add_notice';
+
+  if (/\b(remove|delete)\b/.test(body) && /(service|menu|haircut|fade|trim|shave)/.test(body)) return 'remove_service';
+  if (/\badd\b/.test(body) && /(service|menu|\$\d|price|lineup|haircut|fade|trim|shave)/.test(body)) return 'add_service';
+
+  if (/(hour|open|close|mon|tue|wed|thu|fri|sat|sun|monday|tuesday|wednesday|thursday|friday|saturday|sunday)/.test(body)) return 'update_hours';
+  if (/(address|phone|number|contact)/.test(body)) return 'update_contact';
+
+  if (/\b(change|update|set)\b/.test(body) && /(service|menu|price|\$\d|haircut|fade|trim|shave)/.test(body)) {
+    return 'update_service';
+  }
+
+  if (response.startsWith('updated!')) return 'update_service';
+  if (response.startsWith('done!') && response.includes('added')) return 'add_service';
+  if (response.startsWith('removed!')) return 'remove_service';
+  if (response.startsWith('got it!') && response.includes('closure')) return 'temp_closure';
+
+  return undefined;
+}
+
 function didApplyMutation(
   messageBody: string,
   beforeState: ConversationState | null,
@@ -348,7 +379,7 @@ async function handleInbound(
   const afterState = await getState(message.from);
 
 
-  const parsedIntent = pickIntent(beforeState, afterState);
+  const parsedIntent = pickIntent(beforeState, afterState) ?? inferIntentFromMessage(message, responseText);
   const status = processingError ? 'FAILED' : 'PROCESSED';
   const updateApplied =
     status === 'PROCESSED' &&
@@ -572,7 +603,7 @@ async function handleTelegramInbound(
     });
   }
 
-  const parsedIntent = pickIntent(beforeState, afterState);
+  const parsedIntent = pickIntent(beforeState, afterState) ?? inferIntentFromMessage(message, responseText);
   const status = processingError ? 'FAILED' : 'PROCESSED';
   const updateApplied =
     status === 'PROCESSED' &&
