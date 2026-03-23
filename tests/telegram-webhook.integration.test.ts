@@ -90,11 +90,18 @@ test("telegram webhook returns ignored for unsupported updates", async () => {
 
 test("telegram duplicate /start burst sends only one outbound welcome", async () => {
   const outboundBodies: string[] = [];
+  const outboundUrls: string[] = [];
 
-  globalThis.fetch = (async (_input, init) => {
+  globalThis.fetch = (async (input, init) => {
+    outboundUrls.push(String(input));
     if (typeof init?.body === "string") {
       outboundBodies.push(init.body);
     }
+
+    if (String(input).includes("/deleteMessage")) {
+      return new Response(JSON.stringify({ ok: true, result: true }), { status: 200 });
+    }
+
     return new Response(JSON.stringify({ ok: true, result: { message_id: 42 } }), { status: 200 });
   }) as typeof fetch;
 
@@ -145,4 +152,7 @@ test("telegram duplicate /start burst sends only one outbound welcome", async ()
     body.includes("Welcome to Shopfront on Telegram!"),
   ).length;
   assert.equal(welcomeCount, 1);
+
+  const deleteCount = outboundUrls.filter((url) => url.includes("/deleteMessage")).length;
+  assert.equal(deleteCount, 1);
 });

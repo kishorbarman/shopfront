@@ -28,6 +28,7 @@ import { writeMessageLog } from '../services/messageLog';
 import { summarizeMessageAction } from '../services/messageSummary';
 import { enqueueFailedMessage, enqueueFailedOutboundMessage } from '../services/failedMessageQueue';
 import { sendMessage } from '../services/messaging';
+import { deleteTelegramMessage } from '../services/telegramMessaging';
 import { rebuildSite } from '../services/siteBuilder';
 import { findIdentityByExternalUserId, upsertChannelIdentity } from '../services/channelIdentity';
 import { consumeTelegramLinkCode, parseTelegramLinkCommand } from '../services/telegramLinking';
@@ -620,6 +621,16 @@ async function handleTelegramInbound(
         },
         'Duplicate /start command suppressed',
       );
+
+      try {
+        await deleteTelegramMessage({
+          chatId: message.externalSpaceId ?? message.externalUserId ?? message.from,
+          messageId: parsedUpdate.messageId,
+        });
+      } catch {
+        // Best-effort cleanup: do not fail webhook if Telegram refuses delete.
+      }
+
       telegramOkResponse(reply, { ok: true, duplicate: true });
       return;
     }

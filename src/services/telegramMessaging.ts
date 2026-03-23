@@ -128,3 +128,66 @@ export async function sendTelegramMessage(input: SendTelegramMessageInput): Prom
       : new MessagingError(`Telegram send failed: ${typedError.message}`);
   }
 }
+
+export async function deleteTelegramMessage(input: { chatId: string; messageId: string | number }): Promise<void> {
+  const token = getTelegramToken();
+  const url = `${TELEGRAM_API_BASE}/bot${token}/deleteMessage`;
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        chat_id: input.chatId,
+        message_id: Number(input.messageId),
+      }),
+    });
+
+    const raw = await response.text();
+    let data: TelegramApiResponse | null = null;
+
+    try {
+      data = raw ? (JSON.parse(raw) as TelegramApiResponse) : null;
+    } catch {
+      data = null;
+    }
+
+    if (!response.ok || !data || !data.ok) {
+      const description = data && 'description' in data ? data.description : undefined;
+      throw new MessagingError(
+        `Telegram deleteMessage failed${response.ok ? '' : ` with HTTP ${response.status}`}${
+          description ? `: ${description}` : ''
+        }`,
+      );
+    }
+
+    logger.info(
+      {
+        event: 'telegram_message_deleted',
+        channel: 'telegram',
+        phone: input.chatId,
+        messageId: String(input.messageId),
+      },
+      'Deleted duplicate Telegram message',
+    );
+  } catch (error) {
+    const typedError = error instanceof Error ? error : new Error(String(error));
+
+    logger.warn(
+      {
+        event: 'telegram_message_delete_failed',
+        channel: 'telegram',
+        phone: input.chatId,
+        messageId: String(input.messageId),
+        message: typedError.message,
+      },
+      'Failed to delete duplicate Telegram message',
+    );
+
+    throw typedError instanceof MessagingError
+      ? typedError
+      : new MessagingError(`Telegram deleteMessage failed: ${typedError.message}`);
+  }
+}
