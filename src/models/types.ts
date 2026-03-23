@@ -1,4 +1,4 @@
-export type Channel = 'sms' | 'whatsapp';
+export type Channel = 'sms' | 'whatsapp' | 'telegram';
 
 export interface InboundMessage {
   id: string;
@@ -8,4 +8,7 @@ export interface InboundMessage {
   mediaUrls: string[];
   channel: Channel;
   timestamp: Date;
+  externalUserId?: string;
+  externalSpaceId?: string;
+  rawPayload?: unknown;
 }

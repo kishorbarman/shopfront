@@ -18,7 +18,16 @@ function normalizePhoneNumber(phone: string): string {
 
 function channelPhoneNumber(phone: string, channel: Channel): string {
   const normalized = normalizePhoneNumber(phone);
-  return channel === 'whatsapp' ? `whatsapp:${normalized}` : normalized;
+
+  if (channel === 'whatsapp') {
+    return `whatsapp:${normalized}`;
+  }
+
+  if (channel === 'sms') {
+    return normalized;
+  }
+
+  throw new MessagingError('Telegram outbound messaging is not implemented yet.');
 }
 
 function getTwilioClient() {
@@ -33,25 +42,29 @@ function getTwilioClient() {
 }
 
 function getFromNumber(channel: Channel): string {
-  const smsNumber = config.TWILIO_SMS_NUMBER;
-  const whatsappNumber = config.TWILIO_WHATSAPP_NUMBER;
-
   if (channel === 'whatsapp') {
-    if (!whatsappNumber) {
+    if (!config.TWILIO_WHATSAPP_NUMBER) {
       throw new MessagingError('TWILIO_WHATSAPP_NUMBER must be set for WhatsApp messaging.');
     }
-    return channelPhoneNumber(whatsappNumber, channel);
+    return channelPhoneNumber(config.TWILIO_WHATSAPP_NUMBER, channel);
   }
 
-  if (!smsNumber) {
-    throw new MessagingError('TWILIO_SMS_NUMBER must be set for SMS messaging.');
+  if (channel === 'sms') {
+    if (!config.TWILIO_SMS_NUMBER) {
+      throw new MessagingError('TWILIO_SMS_NUMBER must be set for SMS messaging.');
+    }
+    return channelPhoneNumber(config.TWILIO_SMS_NUMBER, channel);
   }
 
-  return channelPhoneNumber(smsNumber, channel);
+  throw new MessagingError('Telegram outbound messaging is not implemented yet.');
 }
 
 export async function sendMessage(message: OutboundMessage): Promise<string> {
   try {
+    if (message.channel === 'telegram') {
+      throw new MessagingError('Telegram outbound messaging is not implemented yet.');
+    }
+
     if (config.SKIP_TWILIO_SEND) {
       const mockSid = `MOCK_${Date.now()}`;
       logger.info(

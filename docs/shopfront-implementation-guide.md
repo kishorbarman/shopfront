@@ -1063,3 +1063,152 @@ Steps 1-4 can be parallelized (foundation work). Steps 5-8 must be sequential (a
 Total estimated build time: 47–63 hours of focused Claude Code sessions, or roughly 8–12 weeks of part-time work.
 
 Ship it.
+
+
+Phase 5: Telegram Channel Support (Additive to WhatsApp/SMS)
+Add Telegram as an additional messaging channel so shop owners can manage their website through Telegram while keeping existing WhatsApp and SMS flows intact.
+
+Phase 0: Scope Freeze & Architecture
+Goal
+	•	Lock product and technical boundaries before implementation begins.
+
+Implementation Plan
+	1.	Keep existing channels (`sms`, `whatsapp`) unchanged; add `telegram` as additive.
+	2.	Use `shopId` as canonical tenant key; Telegram identity maps through `ChannelIdentity`.
+	3.	Add rollout gate `ENABLE_TELEGRAM` for safe deployment.
+	4.	Define success criteria: onboarding + update + rebuild loop works via Telegram.
+
+Validation
+	•	A signed-off channel strategy doc exists in `docs/`.
+	•	No required WhatsApp/SMS behavior changes are introduced in this phase.
+	•	Feature flag decision and defaults are documented.
+
+Phase 1: Domain Model & Config
+Goal
+	•	Add Telegram to shared types and environment configuration with strict typing.
+
+Implementation Plan
+	1.	Extend shared `Channel` type with `"telegram"`.
+	2.	Confirm `InboundMessage` and `OutboundMessage` support external identity fields for Telegram.
+	3.	Add env vars: `ENABLE_TELEGRAM`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `TELEGRAM_BOT_USERNAME`.
+	4.	Update startup config validation to fail fast when Telegram is enabled but vars are missing.
+	5.	Run Prisma client generation if schema/type references require it.
+
+Validation
+	•	`npm run build` passes with strict TypeScript.
+	•	App startup fails with clear errors when Telegram is enabled and env vars are missing.
+	•	App startup succeeds when Telegram env vars are provided.
+
+Phase 2: Telegram Inbound Webhook
+Goal
+	•	Accept Telegram updates and normalize them into the existing message pipeline.
+
+Implementation Plan
+	1.	Add `POST /api/webhook/telegram` route.
+	2.	Validate Telegram secret header (`X-Telegram-Bot-Api-Secret-Token`).
+	3.	Parse Telegram `Update` payload to unified `InboundMessage`.
+	4.	Add idempotency guard using Redis key by Telegram `update_id`.
+	5.	Pass normalized message into `processMessage()`.
+	6.	Return fast `200 OK` response compatible with Telegram webhook expectations.
+
+Validation
+	•	Valid Telegram webhook requests receive `200`.
+	•	Invalid/missing secret requests receive `403`.
+	•	Duplicate `update_id` does not process twice.
+	•	Structured logs show `event=message_received` with `channel=telegram`.
+
+Phase 3: Telegram Outbound Sender
+Goal
+	•	Send responses back to Telegram chats through adapter-based messaging.
+
+Implementation Plan
+	1.	Create `src/services/telegramMessaging.ts` to call Telegram Bot API.
+	2.	Integrate `telegram` path into `sendMessage()` without changing Twilio behavior.
+	3.	Implement robust retry-safe error handling and mapping to `MessagingError`.
+	4.	Add structured outbound logs with channel and destination metadata.
+
+Validation
+	•	`sendMessage({ channel: "telegram", ... })` sends text successfully.
+	•	Outbound failures are logged with `event=error` and do not crash process.
+	•	Existing SMS/WhatsApp send tests still pass.
+
+Phase 4: Identity Mapping & Account Linking
+Goal
+	•	Map Telegram users/chats to Shopfront shops safely and support existing users.
+
+Implementation Plan
+	1.	Lookup `ChannelIdentity` by `channel=telegram` + `externalUserId` on inbound requests.
+	2.	If no mapping: begin onboarding flow for new Telegram user.
+	3.	Add `/link` flow with one-time code for existing phone-based shops.
+	4.	Persist Telegram identity mapping after onboarding or successful linking.
+	5.	Add `/start` and `/help` command handling.
+
+Validation
+	•	New Telegram user can start onboarding without a phone number.
+	•	Existing shop owner can link Telegram account using one-time code.
+	•	Mapped Telegram messages resolve to correct `shopId` on subsequent requests.
+	•	No cross-tenant identity collisions in DB.
+
+Phase 5: Agent Pipeline Integration
+Goal
+	•	Run Telegram messages through the exact same AI/update pipeline used by other channels.
+
+Implementation Plan
+	1.	Update shop-resolution order to support external identity lookup first.
+	2.	Reuse current classify/extract/execute flow unchanged where possible.
+	3.	Ensure conversation state/history keys work for Telegram identity.
+	4.	Ensure mutation handlers and `rebuildSite()` triggers run for Telegram-originated updates.
+
+Validation
+	•	Telegram message updates DB records correctly (services/hours/notices/contact).
+	•	Website rebuild is triggered and visible at `/s/:slug` after update.
+	•	Message logs include parsed intent and update summary for Telegram events.
+
+Phase 6: Testing & Regression Coverage
+Goal
+	•	Prove Telegram works end-to-end and existing channels remain stable.
+
+Implementation Plan
+	1.	Add unit tests for Telegram auth validator (valid + invalid).
+	2.	Add unit tests for payload normalization and unsupported update handling.
+	3.	Add integration tests for Telegram onboarding and update handlers.
+	4.	Run full regression suite for WhatsApp/SMS.
+
+Validation
+	•	All new Telegram unit tests pass.
+	•	Telegram happy-path integration tests pass.
+	•	Existing WhatsApp/SMS tests continue passing without behavior regressions.
+
+Phase 7: Deployment & Controlled Rollout
+Goal
+	•	Ship Telegram safely with environment-gated rollout.
+
+Implementation Plan
+	1.	Add Telegram env vars in Railway staging and production.
+	2.	Register Telegram webhook URL with secret token.
+	3.	Deploy with `ENABLE_TELEGRAM=false` first; smoke-test routes.
+	4.	Enable Telegram flag and run end-to-end production smoke tests.
+	5.	Monitor logs and error rates for 48 hours.
+
+Validation
+	•	Deployment succeeds with Telegram code present but disabled.
+	•	After enabling flag, Telegram webhook receives and processes messages in production.
+	•	Health endpoint remains green post-rollout.
+	•	No spike in failed message queue or app error rate.
+
+Phase 8: Post-Launch Hardening
+Goal
+	•	Improve reliability, supportability, and operational confidence.
+
+Implementation Plan
+	1.	Integrate Telegram failures into dead-letter/replay flow.
+	2.	Add channel-aware rate limits and anti-spam guardrails.
+	3.	Add operational commands (`/status`, `/site`, `/support`) and docs.
+	4.	Add alerting for webhook auth failures and outbound delivery failures.
+
+Validation
+	•	Failed Telegram messages can be replayed successfully from admin script.
+	•	Rate-limit behavior is enforced and logged.
+	•	Support command path works and routes correctly.
+	•	Monitoring alerts trigger on simulated failure conditions.
+

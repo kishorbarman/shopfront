@@ -20,6 +20,11 @@ type AppConfig = {
   SKIP_TWILIO_VALIDATION: boolean;
   SKIP_TWILIO_SEND: boolean;
   MOCK_LLM: boolean;
+  ENABLE_TELEGRAM: boolean;
+  TELEGRAM_BOT_TOKEN: string;
+  TELEGRAM_WEBHOOK_SECRET: string;
+  TELEGRAM_BOT_USERNAME: string;
+  SKIP_TELEGRAM_VALIDATION: boolean;
 };
 
 function requiredString(name: string, env: NodeJS.ProcessEnv, errors: string[]): string {
@@ -29,6 +34,10 @@ function requiredString(name: string, env: NodeJS.ProcessEnv, errors: string[]):
     return '';
   }
   return value;
+}
+
+function optionalString(name: string, env: NodeJS.ProcessEnv): string {
+  return env[name]?.trim() ?? '';
 }
 
 function requiredPort(name: string, env: NodeJS.ProcessEnv, errors: string[]): number {
@@ -59,7 +68,6 @@ function resolveMockLlm(env: NodeJS.ProcessEnv): boolean {
   return parseBoolean('MOCK_LLM', env) || parseBoolean('MOCK_ANTHROPIC', env);
 }
 
-
 function resolveGeminiApiKey(env: NodeJS.ProcessEnv): string {
   return env.GEMINI_API_KEY?.trim() || env.ANTHROPIC_API_KEY?.trim() || '';
 }
@@ -74,6 +82,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   }
 
   const mockLlm = resolveMockLlm(env);
+  const enableTelegram = parseBoolean('ENABLE_TELEGRAM', env);
+  const skipTelegramValidation = parseBoolean('SKIP_TELEGRAM_VALIDATION', env);
 
   const config: AppConfig = {
     NODE_ENV,
@@ -84,13 +94,27 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     TWILIO_AUTH_TOKEN: requiredString('TWILIO_AUTH_TOKEN', env, errors),
     TWILIO_SMS_NUMBER: requiredString('TWILIO_SMS_NUMBER', env, errors),
     TWILIO_WHATSAPP_NUMBER: requiredString('TWILIO_WHATSAPP_NUMBER', env, errors),
-    GEMINI_API_KEY: mockLlm ? resolveGeminiApiKey(env) : resolveGeminiApiKey(env) || requiredString('GEMINI_API_KEY', env, errors),
+    GEMINI_API_KEY: mockLlm
+      ? resolveGeminiApiKey(env)
+      : resolveGeminiApiKey(env) || requiredString('GEMINI_API_KEY', env, errors),
     SENTRY_DSN: env.SENTRY_DSN?.trim() ?? '',
     BASE_URL: requiredString('BASE_URL', env, errors),
     SITE_OUTPUT_DIR: resolveSiteOutputDir(env, NODE_ENV),
     SKIP_TWILIO_VALIDATION: parseBoolean('SKIP_TWILIO_VALIDATION', env),
     SKIP_TWILIO_SEND: parseBoolean('SKIP_TWILIO_SEND', env),
     MOCK_LLM: mockLlm,
+    ENABLE_TELEGRAM: enableTelegram,
+    TELEGRAM_BOT_TOKEN: enableTelegram
+      ? requiredString('TELEGRAM_BOT_TOKEN', env, errors)
+      : optionalString('TELEGRAM_BOT_TOKEN', env),
+    TELEGRAM_WEBHOOK_SECRET:
+      enableTelegram && !skipTelegramValidation
+        ? requiredString('TELEGRAM_WEBHOOK_SECRET', env, errors)
+        : optionalString('TELEGRAM_WEBHOOK_SECRET', env),
+    TELEGRAM_BOT_USERNAME: enableTelegram
+      ? requiredString('TELEGRAM_BOT_USERNAME', env, errors)
+      : optionalString('TELEGRAM_BOT_USERNAME', env),
+    SKIP_TELEGRAM_VALIDATION: skipTelegramValidation,
   };
 
   if (config.NODE_ENV === 'production' && !config.SENTRY_DSN) {

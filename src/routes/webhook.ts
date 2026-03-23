@@ -13,6 +13,13 @@ import {
 } from '../lib/errors';
 import logger from '../lib/logger';
 import { reportError } from '../lib/observability';
+import { redis } from '../lib/redis';
+import {
+  parseTelegramUpdate,
+  telegramIdempotencyKey,
+  type TelegramUpdate,
+  validateTelegramWebhookSignature,
+} from '../lib/telegramAuth';
 import { processMessage } from '../services/agent';
 import { getState, type ConversationState } from '../services/conversationState';
 import { writeMessageLog } from '../services/messageLog';
@@ -108,6 +115,9 @@ function emptyTwimlResponse(reply: FastifyReply): void {
   reply.code(200).type('text/xml').send(response.toString());
 }
 
+function telegramOkResponse(reply: FastifyReply, payload: Record<string, unknown> = { ok: true }): void {
+  reply.code(200).send(payload);
+}
 
 function isAffirmative(text: string): boolean {
   return /^(yes|yeah|yep|correct|looks good|right|ok|okay|do it|sure)\b/i.test(text.trim());
@@ -286,7 +296,6 @@ async function handleInbound(
     responseText,
   });
 
-
   const logShopId = afterState?.shopId ?? beforeState?.shopId ?? null;
 
   if (logShopId) {
@@ -342,6 +351,169 @@ async function handleInbound(
   emptyTwimlResponse(reply);
 }
 
+async function handleTelegramInbound(
+  request: FastifyRequest<{ Body: TelegramUpdate }>,
+  reply: FastifyReply,
+): Promise<void> {
+  if (!config.ENABLE_TELEGRAM) {
+    reply.code(404).send({ error: 'Telegram integration is disabled' });
+    return;
+  }
+
+  // TODO: Keep SKIP_TELEGRAM_VALIDATION=false in production environments.
+  if (
+    !validateTelegramWebhookSignature(
+      request.headers,
+      config.TELEGRAM_WEBHOOK_SECRET,
+      config.SKIP_TELEGRAM_VALIDATION,
+    )
+  ) {
+    logger.warn(
+      {
+        event: 'error',
+        type: 'TelegramSignatureValidationError',
+        path: request.url,
+      },
+      'Telegram request validation failed',
+    );
+    reply.code(403).send({ error: 'Invalid Telegram webhook signature' });
+    return;
+  }
+
+  const parsedUpdate = parseTelegramUpdate(request.body ?? {});
+  if (!parsedUpdate) {
+    logger.info(
+      {
+        event: 'telegram_update_ignored',
+      },
+      'Ignored unsupported Telegram update payload',
+    );
+    telegramOkResponse(reply, { ok: true, ignored: true });
+    return;
+  }
+
+  const idempotencyKey = telegramIdempotencyKey(parsedUpdate.updateId);
+  const marked = await redis.set(idempotencyKey, '1', 'EX', 60 * 60 * 24, 'NX');
+  if (marked !== 'OK') {
+    logger.info(
+      {
+        event: 'telegram_duplicate_update',
+        updateId: parsedUpdate.updateId,
+      },
+      'Duplicate Telegram update ignored',
+    );
+    telegramOkResponse(reply, { ok: true, duplicate: true });
+    return;
+  }
+
+  const message: InboundMessage = {
+    id: `TG_${parsedUpdate.messageId}`,
+    from: `telegram:${parsedUpdate.externalUserId}`,
+    to: config.TELEGRAM_BOT_USERNAME || 'telegram-bot',
+    body: parsedUpdate.body,
+    mediaUrls: [],
+    channel: 'telegram',
+    timestamp: parsedUpdate.timestamp,
+    externalUserId: parsedUpdate.externalUserId,
+    externalSpaceId: parsedUpdate.externalSpaceId,
+    rawPayload: request.body,
+  };
+
+  logger.info(
+    {
+      event: 'message_received',
+      phone: message.from,
+      channel: message.channel,
+      bodyLength: message.body.length,
+      hasMedia: message.mediaUrls.length > 0,
+      externalUserId: message.externalUserId,
+      externalSpaceId: message.externalSpaceId,
+    },
+    'Inbound message received',
+  );
+
+  const beforeState = await getState(message.from);
+
+  let responseText: string;
+  let processingError: Error | null = null;
+
+  try {
+    responseText = await processWithRetries(message);
+  } catch (error) {
+    processingError = error instanceof Error ? error : new Error(String(error));
+    responseText = fallbackForError(error);
+
+    await enqueueFailedMessage(message, error, PROCESS_RETRY_LIMIT);
+
+    reportError(processingError, {
+      tags: {
+        channel: message.channel,
+        shopId: 'unknown',
+        intent: 'unknown',
+      },
+      extra: {
+        phone: message.from,
+        telegramUpdateId: parsedUpdate.updateId,
+      },
+    });
+
+    logger.error(
+      {
+        event: 'error',
+        type: processingError.name,
+        phone: message.from,
+        messageId: message.id,
+        message: processingError.message,
+        stack: processingError.stack,
+      },
+      'Telegram message processing failed after retries; saved to dead letter queue',
+    );
+  }
+
+  const afterState = await getState(message.from);
+  const parsedIntent = pickIntent(beforeState, afterState);
+  const status = processingError ? 'FAILED' : 'PROCESSED';
+  const updateApplied =
+    status === 'PROCESSED' &&
+    (didApplyMutation(message.body, beforeState, afterState) || responseImpliesMutation(responseText));
+  const parsedSummary =
+    summarizeMessageAction({
+      messageBody: message.body,
+      beforeState,
+      afterState,
+      updateApplied,
+      status,
+    }) ?? (updateApplied ? 'applied_change: ' + responseText : undefined);
+
+  await writeMessageLog({
+    twilioSid: message.id,
+    shopId: afterState?.shopId ?? beforeState?.shopId ?? null,
+    phone: message.from,
+    channel: message.channel,
+    inboundText: message.body || '(empty)',
+    parsedIntent,
+    parsedSummary,
+    updateApplied,
+    status,
+    errorMessage: processingError?.message,
+    responseText,
+  });
+
+  logger.info(
+    {
+      event: 'telegram_response_ready',
+      externalUserId: message.externalUserId,
+      externalSpaceId: message.externalSpaceId,
+      bodyLength: responseText.length,
+      hasError: Boolean(processingError),
+    },
+    'Telegram response generated',
+  );
+
+  // TODO: Send Telegram outbound response in Phase 3 via Telegram adapter.
+  telegramOkResponse(reply);
+}
+
 const webhookRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post<{ Body: TwilioWebhookBody }>('/api/webhook/sms', async (request, reply) => {
     await handleInbound(request, reply, 'sms');
@@ -349,6 +521,10 @@ const webhookRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.post<{ Body: TwilioWebhookBody }>('/api/webhook/whatsapp', async (request, reply) => {
     await handleInbound(request, reply, 'whatsapp');
+  });
+
+  fastify.post<{ Body: TelegramUpdate }>('/api/webhook/telegram', async (request, reply) => {
+    await handleTelegramInbound(request, reply);
   });
 };
 
