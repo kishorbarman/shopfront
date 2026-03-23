@@ -8,22 +8,39 @@ datasource db {
 }
 
 model Shop {
-  id        String     @id @default(uuid())
-  name      String
-  slug      String     @unique
-  category  String
-  phone     String     @unique
-  address   String?
-  latitude  Float?
-  longitude Float?
-  photoUrl  String?
-  status    ShopStatus @default(ONBOARDING)
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-  services  Service[]
-  hours     Hour[]
-  notices   Notice[]
-  logs      MessageLog[]
+  id         String            @id @default(uuid())
+  name       String
+  slug       String            @unique
+  category   String
+  phone      String            @unique
+  address    String?
+  latitude   Float?
+  longitude  Float?
+  photoUrl   String?
+  status     ShopStatus        @default(ONBOARDING)
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+  services   Service[]
+  hours      Hour[]
+  notices    Notice[]
+  logs       MessageLog[]
+  identities ChannelIdentity[]
+}
+
+model ChannelIdentity {
+  id              String   @id @default(uuid())
+  shopId          String
+  shop            Shop     @relation(fields: [shopId], references: [id])
+  channel         String
+  phone           String?
+  externalUserId  String?
+  externalSpaceId String?
+  createdAt       DateTime @default(now())
+
+  @@unique([channel, phone])
+  @@unique([channel, externalUserId])
+  @@index([channel, phone])
+  @@index([channel, externalUserId])
 }
 
 enum MessageProcessStatus {
@@ -109,7 +126,7 @@ enum NoticeType {
 }
 
 model FailedMessage {
-  id           String   @id @default(uuid())
+  id           String    @id @default(uuid())
   twilioSid    String?
   phone        String
   channel      String
@@ -117,8 +134,8 @@ model FailedMessage {
   errorType    String
   errorMessage String
   errorStack   String?
-  retries      Int      @default(3)
-  createdAt    DateTime @default(now())
+  retries      Int       @default(3)
+  createdAt    DateTime  @default(now())
   processedAt  DateTime?
 
   @@index([phone])

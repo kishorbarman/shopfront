@@ -13,9 +13,11 @@ import { AgentParseError, DatabaseError, RateLimitError, ValidationError } from 
 import logger from '../lib/logger';
 import { reportError } from '../lib/observability';
 import { prisma } from '../lib/prisma';
+import { findIdentityByExternalUserId, upsertChannelIdentity } from './channelIdentity';
 import type { InboundMessage } from '../models/types';
 import { addImagesToGallery, downloadAndStoreImages, type StoredImage } from './mediaStorage';
 import { rebuildSite } from './siteBuilder';
+import { createTelegramLinkCode, isTelegramLinkCodeRequest } from './telegramLinking';
 import {
   addService,
   addNotice,
@@ -123,7 +125,7 @@ type ShopContext = Shop & {
   notices: Notice[];
 };
 
-async function loadShopContext(phone: string): Promise<ShopContext | null> {
+async function loadShopContextByPhone(phone: string): Promise<ShopContext | null> {
   return prisma.shop.findUnique({
     where: { phone },
     include: {
@@ -141,6 +143,48 @@ async function loadShopContext(phone: string): Promise<ShopContext | null> {
       },
     },
   }) as unknown as Promise<ShopContext | null>;
+}
+
+async function loadShopContextById(shopId: string): Promise<ShopContext | null> {
+  return prisma.shop.findUnique({
+    where: { id: shopId },
+    include: {
+      services: {
+        where: { isActive: true },
+        select: { name: true, price: true },
+      },
+      hours: {
+        select: { dayOfWeek: true, openTime: true, closeTime: true, isClosed: true },
+      },
+      notices: {
+        where: {
+          OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+        },
+      },
+    },
+  }) as unknown as Promise<ShopContext | null>;
+}
+
+async function loadShopContext(message: InboundMessage): Promise<ShopContext | null> {
+  if (message.channel === 'telegram' && message.externalUserId) {
+    const identity = await findIdentityByExternalUserId('telegram', message.externalUserId);
+    if (identity) {
+      return loadShopContextById(identity.shopId);
+    }
+  }
+
+  return loadShopContextByPhone(message.from);
+}
+
+async function refreshShopContext(
+  message: InboundMessage,
+  existingShop: ShopContext | null,
+): Promise<ShopContext | null> {
+  if (existingShop) {
+    return loadShopContextById(existingShop.id);
+  }
+
+  return loadShopContext(message);
 }
 
 async function applyPhotoSelection(
@@ -398,7 +442,7 @@ export async function processMessage(message: InboundMessage): Promise<string> {
       throw new RateLimitError('User exceeded per-phone rate limit.');
     }
 
-    existingShop = await loadShopContext(message.from);
+    existingShop = await loadShopContext(message);
 
     state = await getState(message.from);
     if (!state) {
@@ -408,6 +452,32 @@ export async function processMessage(message: InboundMessage): Promise<string> {
     await addMessage(message.from, 'user', message.body);
 
     let response: string;
+
+    if (
+      existingShop &&
+      (message.channel === 'sms' || message.channel === 'whatsapp') &&
+      isTelegramLinkCodeRequest(message.body)
+    ) {
+      const code = await createTelegramLinkCode(existingShop.id);
+      response =
+        'Telegram link code: ' +
+        code +
+        '. Open Telegram and send /link ' +
+        code +
+        ' to your Shopfront bot within 10 minutes.';
+
+      state = {
+        ...state,
+        mode: 'active',
+        shopId: existingShop.id,
+        pendingAction: undefined,
+        lastMessageAt: new Date().toISOString(),
+      };
+
+      await setState(message.from, state);
+      await addMessage(message.from, 'agent', response);
+      return response;
+    }
 
     if (!existingShop || state.mode === 'onboarding') {
       const onboarding = await runOnboarding(message, state);
@@ -638,7 +708,7 @@ export async function processMessage(message: InboundMessage): Promise<string> {
       );
 
       if (classification.intent === 'query') {
-        const refreshed = (await loadShopContext(message.from)) ?? existingShop;
+        const refreshed = (await refreshShopContext(message, existingShop)) ?? existingShop;
         response = formatQueryResponse(message.body, {
           services: refreshed.services.map((service) => ({
             name: service.name,
@@ -698,13 +768,22 @@ export async function processMessage(message: InboundMessage): Promise<string> {
         };
       }
 
-      existingShop = await loadShopContext(message.from);
+      existingShop = await loadShopContext(message);
       if (existingShop) {
         state.shopId = existingShop.id;
       }
     }
 
     await setState(message.from, state);
+
+    if (message.channel === 'telegram' && message.externalUserId && state.shopId) {
+      await upsertChannelIdentity(state.shopId, {
+        channel: 'telegram',
+        externalUserId: message.externalUserId,
+        externalSpaceId: message.externalSpaceId,
+        phone: message.from,
+      });
+    }
 
     logger.info(
       {

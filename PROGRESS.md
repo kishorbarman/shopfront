@@ -720,3 +720,72 @@ Current Telegram status:
 - Inbound webhook: working in production.
 - Outbound Telegram responses: implemented and enabled.
 - End-to-end Telegram conversation path is now active (subject to bot webhook/env configuration).
+
+### Phase 4 - Telegram Identity Mapping & Account Linking (Completed)
+
+What was implemented:
+- Added `ChannelIdentity` data model in Prisma to map external messaging identities to shops.
+  - New relation on `Shop.identities`
+  - Unique keys for `(channel, phone)` and `(channel, externalUserId)`
+- Added migration SQL for `ChannelIdentity` table and indexes.
+- Added `src/services/channelIdentity.ts` helper service:
+  - `findIdentityByExternalUserId`
+  - `findIdentityByPhone`
+  - `upsertChannelIdentity`
+  - `getShopByIdentity`
+- Added Telegram linking service `src/services/telegramLinking.ts`:
+  - One-time code generation and consumption (`createTelegramLinkCode`, `consumeTelegramLinkCode`)
+  - Telegram command parsing (`/start`, `/help`, `/link CODE`)
+  - SMS/WhatsApp trigger phrase detection for code generation (`link telegram`)
+- Updated agent pipeline (`src/services/agent.ts`):
+  - Resolves Telegram shops via identity mapping first
+  - Adds phone-channel trigger to generate one-time Telegram link code for existing shops
+  - Persists Telegram identity mapping after successful onboarding/processing when `shopId` is known
+- Updated Telegram webhook (`src/routes/webhook.ts`):
+  - Added command handling for `/start`, `/help`, `/link CODE`
+  - Successful `/link CODE` now persists `ChannelIdentity` and initializes active conversation state
+  - Persists identity mapping after processed messages when `shopId` exists
+
+Validation performed:
+- `npx prisma generate` passed with updated schema.
+- `npm run build` passed.
+- `npm run lint` passed.
+- Telegram-focused tests passed:
+  - `tests/config-telegram.test.ts`
+  - `tests/telegramAuth.test.ts`
+  - `tests/telegramMessaging.test.ts`
+  - `tests/telegramLinking.test.ts`
+
+Notes:
+- Local `prisma migrate dev --create-only` reports existing migration-history drift in the current local DB state.
+  - The repository migration files include the new `ChannelIdentity` migration, but applying in this specific local DB requires reconciliation/reset due pre-existing divergence.
+
+## Phase 4 Status Update (Telegram Identity Mapping + Linking)
+Date: 2026-03-22
+
+Completed:
+- Added `ChannelIdentity` model and relation on `Shop` for cross-channel identity mapping.
+- Added migration files for `ChannelIdentity` table, indexes, and unique constraints.
+- Added `src/services/channelIdentity.ts` for identity lookup/upsert helpers.
+- Added `src/services/telegramLinking.ts` for one-time link code generation/consumption and command parsing.
+- Updated Telegram webhook handling:
+  - `/start` welcome behavior
+  - `/help` usage guidance
+  - `/link CODE` linking flow
+- Updated agent pipeline to:
+  - Resolve Telegram users by mapped identity first
+  - Persist Telegram identity mapping after onboarding/known-shop processing
+  - Generate link code when phone channels send "link telegram"
+
+Validation completed:
+- `npx prisma generate` passed
+- `npm run build` passed
+- `npm run lint` passed
+- Telegram test suite passed:
+  - `tests/config-telegram.test.ts`
+  - `tests/telegramAuth.test.ts`
+  - `tests/telegramMessaging.test.ts`
+  - `tests/telegramLinking.test.ts`
+
+Known environment note:
+- Local `prisma migrate dev` reports migration drift in the local DB state; code and migration files are present, but local DB history needs reconciliation/reset before applying migrations on this machine.

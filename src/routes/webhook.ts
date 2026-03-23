@@ -20,13 +20,16 @@ import {
   type TelegramUpdate,
   validateTelegramWebhookSignature,
 } from '../lib/telegramAuth';
+import { prisma } from '../lib/prisma';
 import { processMessage } from '../services/agent';
-import { getState, type ConversationState } from '../services/conversationState';
+import { getState, setState, type ConversationState } from '../services/conversationState';
 import { writeMessageLog } from '../services/messageLog';
 import { summarizeMessageAction } from '../services/messageSummary';
 import { enqueueFailedMessage } from '../services/failedMessageQueue';
 import { sendMessage } from '../services/messaging';
 import { rebuildSite } from '../services/siteBuilder';
+import { findIdentityByExternalUserId, upsertChannelIdentity } from '../services/channelIdentity';
+import { consumeTelegramLinkCode, parseTelegramLinkCommand } from '../services/telegramLinking';
 
 type TwilioWebhookBody = {
   MessageSid?: string;
@@ -117,6 +120,81 @@ function emptyTwimlResponse(reply: FastifyReply): void {
 
 function telegramOkResponse(reply: FastifyReply, payload: Record<string, unknown> = { ok: true }): void {
   reply.code(200).send(payload);
+}
+
+async function sendTelegramReply(to: string, body: string): Promise<void> {
+  await sendMessage({
+    to,
+    body,
+    channel: 'telegram',
+  });
+}
+
+async function handleTelegramCommand(
+  message: InboundMessage,
+  linkedShopId: string | null,
+): Promise<string | null> {
+  const command = parseTelegramLinkCommand(message.body);
+  if (!command) {
+    return null;
+  }
+
+  if (command.command === 'start') {
+    if (linkedShopId) {
+      const shop = await prisma.shop.findUnique({
+        where: { id: linkedShopId },
+        select: { name: true },
+      });
+
+      if (shop) {
+        return "Welcome back! You're linked to " + shop.name + '. Text any update now, or use /help.';
+      }
+    }
+
+    return 'Welcome to Shopfront on Telegram. To start fresh, tell me your business name. If your shop already exists, send /link YOURCODE to connect this Telegram account.';
+  }
+
+  if (command.command === 'help') {
+    return 'I can update your services, hours, notices, address, and photos. If your shop exists by phone, text "link telegram" there to get a code, then send /link YOURCODE here.';
+  }
+
+  if (command.command === 'link') {
+    if (linkedShopId) {
+      return 'This Telegram account is already linked. You can start sending updates directly.';
+    }
+
+    if (!command.code) {
+      return 'Please send /link YOURCODE. You can get the code by texting "link telegram" from your linked phone number.';
+    }
+
+    const shopId = await consumeTelegramLinkCode(command.code);
+    if (!shopId) {
+      return 'That link code is invalid or expired. Text "link telegram" from your phone number to generate a new code.';
+    }
+
+    await upsertChannelIdentity(shopId, {
+      channel: 'telegram',
+      externalUserId: message.externalUserId,
+      externalSpaceId: message.externalSpaceId,
+      phone: message.from,
+    });
+
+    await setState(message.from, {
+      mode: 'active',
+      shopId,
+      lastMessageAt: new Date().toISOString(),
+    });
+
+    const shop = await prisma.shop.findUnique({
+      where: { id: shopId },
+      select: { slug: true },
+    });
+
+    const baseUrl = config.BASE_URL.replace(/\/$/, '');
+    return "Linked successfully. You're all set. Your page is " + baseUrl + '/s/' + (shop?.slug ?? 'your-shop') + '.';
+  }
+
+  return null;
 }
 
 function isAffirmative(text: string): boolean {
@@ -268,6 +346,8 @@ async function handleInbound(
   }
 
   const afterState = await getState(message.from);
+
+
   const parsedIntent = pickIntent(beforeState, afterState);
   const status = processingError ? 'FAILED' : 'PROCESSED';
   const updateApplied =
@@ -432,6 +512,17 @@ async function handleTelegramInbound(
     'Inbound message received',
   );
 
+  const linkedIdentity = message.externalUserId
+    ? await findIdentityByExternalUserId('telegram', message.externalUserId)
+    : null;
+
+  const commandResponse = await handleTelegramCommand(message, linkedIdentity?.shopId ?? null);
+  if (commandResponse) {
+    await sendTelegramReply(message.externalSpaceId ?? message.externalUserId ?? message.from, commandResponse);
+    telegramOkResponse(reply);
+    return;
+  }
+
   const beforeState = await getState(message.from);
 
   let responseText: string;
@@ -471,6 +562,16 @@ async function handleTelegramInbound(
   }
 
   const afterState = await getState(message.from);
+
+  if (message.externalUserId && afterState?.shopId) {
+    await upsertChannelIdentity(afterState.shopId, {
+      channel: 'telegram',
+      externalUserId: message.externalUserId,
+      externalSpaceId: message.externalSpaceId,
+      phone: message.from,
+    });
+  }
+
   const parsedIntent = pickIntent(beforeState, afterState);
   const status = processingError ? 'FAILED' : 'PROCESSED';
   const updateApplied =
