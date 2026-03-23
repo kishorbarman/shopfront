@@ -264,7 +264,7 @@ export async function runOnboarding(
     const name = await parseBusinessName(message.body);
     if (!name) {
       return {
-        response: "I didn't catch the business name. What's your business called?",
+        response: "Welcome to Shopfront! I'm here to help you get your page live and keep it updated. You can start by telling me your business name.",
         state: withDraft(state, draft),
       };
     }
