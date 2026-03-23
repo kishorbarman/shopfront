@@ -27,7 +27,7 @@ function loadModule() {
 
   return require('../src/services/telegramLinking') as {
     isTelegramLinkCodeRequest: (text: string) => boolean;
-    parseTelegramLinkCommand: (text: string) => { command: 'start' | 'help' | 'link'; code?: string } | null;
+    parseTelegramLinkCommand: (text: string) => { command: 'start' | 'help' | 'link' | 'status' | 'site' | 'support'; code?: string } | null;
   };
 }
 
@@ -66,4 +66,13 @@ test('isTelegramLinkCodeRequest matches supported phone prompts', () => {
   assert.equal(isTelegramLinkCodeRequest('/link telegram'), true);
   assert.equal(isTelegramLinkCodeRequest('telegram link'), true);
   assert.equal(isTelegramLinkCodeRequest('link my telegram now'), false);
+});
+
+
+test('parseTelegramLinkCommand parses operational commands', () => {
+  const { parseTelegramLinkCommand } = loadModule();
+
+  assert.deepEqual(parseTelegramLinkCommand('/status'), { command: 'status' });
+  assert.deepEqual(parseTelegramLinkCommand('/site'), { command: 'site' });
+  assert.deepEqual(parseTelegramLinkCommand('/support'), { command: 'support' });
 });

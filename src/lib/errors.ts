@@ -33,6 +33,13 @@ export class RateLimitError extends Error {
   }
 }
 
+export class SpamGuardError extends Error {
+  constructor(message = 'Potential spam detected') {
+    super(message);
+    this.name = 'SpamGuardError';
+  }
+}
+
 export class ValidationError extends Error {
   constructor(message = 'Validation failed') {
     super(message);

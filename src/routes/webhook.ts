@@ -9,10 +9,11 @@ import {
   DatabaseError,
   MessagingError,
   RateLimitError,
+  SpamGuardError,
   ValidationError,
 } from '../lib/errors';
 import logger from '../lib/logger';
-import { reportError } from '../lib/observability';
+import { reportError, triggerOperationalAlert } from '../lib/observability';
 import { redis } from '../lib/redis';
 import {
   parseTelegramUpdate,
@@ -25,11 +26,12 @@ import { processMessage } from '../services/agent';
 import { getState, setState, type ConversationState } from '../services/conversationState';
 import { writeMessageLog } from '../services/messageLog';
 import { summarizeMessageAction } from '../services/messageSummary';
-import { enqueueFailedMessage } from '../services/failedMessageQueue';
+import { enqueueFailedMessage, enqueueFailedOutboundMessage } from '../services/failedMessageQueue';
 import { sendMessage } from '../services/messaging';
 import { rebuildSite } from '../services/siteBuilder';
 import { findIdentityByExternalUserId, upsertChannelIdentity } from '../services/channelIdentity';
 import { consumeTelegramLinkCode, parseTelegramLinkCommand } from '../services/telegramLinking';
+import { incrementCounter } from '../lib/opsMetrics';
 
 type TwilioWebhookBody = {
   MessageSid?: string;
@@ -155,7 +157,62 @@ async function handleTelegramCommand(
   }
 
   if (command.command === 'help') {
-    return 'I can update your services, hours, notices, address, and photos. If your shop exists by phone, text "link telegram" there to get a code, then send /link YOURCODE here.';
+    return 'I can update your services, hours, notices, address, and photos. Useful commands: /status, /site, /support. If your shop exists by phone, text "link telegram" there to get a code, then send /link YOURCODE here.';
+  }
+
+  if (command.command === 'status') {
+    if (!linkedShopId) {
+      return 'Status: not linked yet. Send /link YOURCODE or start onboarding by telling me your business name.';
+    }
+
+    const state = await getState(message.from);
+    const shop = await prisma.shop.findUnique({
+      where: { id: linkedShopId },
+      select: { name: true, status: true },
+    });
+
+    const pendingIntent = state?.pendingAction?.intent ? ', pending=' + state.pendingAction.intent : '';
+    return (
+      'Status: linked to ' +
+      (shop?.name ?? 'your shop') +
+      ' (' +
+      (shop?.status ?? 'ACTIVE') +
+      '), mode=' +
+      (state?.mode ?? 'active') +
+      pendingIntent +
+      '.'
+    );
+  }
+
+  if (command.command === 'site') {
+    if (!linkedShopId) {
+      return 'No linked site yet. Send /link YOURCODE or complete onboarding first.';
+    }
+
+    const shop = await prisma.shop.findUnique({
+      where: { id: linkedShopId },
+      select: { slug: true },
+    });
+
+    if (!shop?.slug) {
+      return 'I could not find your site URL yet. Try again in a moment.';
+    }
+
+    return 'Your live site: ' + config.BASE_URL.replace(/\/$/, '') + '/s/' + shop.slug;
+  }
+
+  if (command.command === 'support') {
+    logger.info(
+      {
+        event: 'support_requested',
+        channel: 'telegram',
+        phone: message.from,
+        linkedShopId: linkedShopId ?? null,
+      },
+      'Support command requested',
+    );
+
+    return 'Support: I will troubleshoot first. If I am not confident, I escalate to a human specialist. You can also email contact@shopfront.page.';
   }
 
   if (command.command === 'link') {
@@ -260,7 +317,7 @@ function responseImpliesMutation(responseText: string): boolean {
 }
 
 function fallbackForError(error: unknown): string {
-  if (error instanceof RateLimitError) {
+  if (error instanceof RateLimitError || error instanceof SpamGuardError) {
     return "You're sending a lot of messages! Give me a minute to catch up.";
   }
 
@@ -321,6 +378,11 @@ async function handleInbound(
       },
       'Twilio signature validation failed',
     );
+    incrementCounter('webhookAuthFailures');
+    triggerOperationalAlert('webhook_auth_failed', 'Twilio signature validation failed', {
+      channel,
+      path: request.url,
+    });
     reply.code(403).send({ error: 'Invalid Twilio signature' });
     return;
   }
@@ -428,14 +490,25 @@ async function handleInbound(
     }
   }
 
+  const outboundReply = {
+    to: message.from,
+    body: responseText,
+    channel: message.channel,
+  } as const;
+
   try {
-    await sendMessage({
-      to: message.from,
-      body: responseText,
-      channel: message.channel,
-    });
+    await sendMessage(outboundReply);
   } catch (error) {
     const typedError = error instanceof Error ? error : new Error(String(error));
+    incrementCounter('outboundDeliveryFailures');
+    triggerOperationalAlert('outbound_delivery_failed', 'Failed to deliver outbound channel reply', {
+      channel: message.channel,
+      phone: message.from,
+      messageId: message.id,
+    });
+
+    await enqueueFailedOutboundMessage(message, outboundReply, typedError, PROCESS_RETRY_LIMIT);
+
     reportError(typedError, {
       tags: {
         channel: message.channel,
@@ -487,6 +560,10 @@ async function handleTelegramInbound(
       },
       'Telegram request validation failed',
     );
+    incrementCounter('webhookAuthFailures');
+    triggerOperationalAlert('webhook_auth_failed', 'Telegram webhook signature validation failed', {
+      path: request.url,
+    });
     reply.code(403).send({ error: 'Invalid Telegram webhook signature' });
     return;
   }
@@ -549,7 +626,36 @@ async function handleTelegramInbound(
 
   const commandResponse = await handleTelegramCommand(message, linkedIdentity?.shopId ?? null);
   if (commandResponse) {
-    await sendTelegramReply(message.externalSpaceId ?? message.externalUserId ?? message.from, commandResponse);
+    const commandOutboundReply = {
+      to: message.externalSpaceId ?? message.externalUserId ?? message.from,
+      body: commandResponse,
+      channel: 'telegram' as const,
+    };
+
+    try {
+      await sendTelegramReply(commandOutboundReply.to, commandResponse);
+    } catch (error) {
+      const typedError = error instanceof Error ? error : new Error(String(error));
+      incrementCounter('outboundDeliveryFailures');
+      triggerOperationalAlert('outbound_delivery_failed', 'Failed to deliver Telegram command reply', {
+        channel: message.channel,
+        phone: message.from,
+        messageId: message.id,
+        telegramUpdateId: parsedUpdate.updateId,
+      });
+
+      await enqueueFailedOutboundMessage(message, commandOutboundReply, typedError, PROCESS_RETRY_LIMIT);
+      reportError(typedError, {
+        tags: {
+          channel: message.channel,
+        },
+        extra: {
+          phone: message.from,
+          telegramUpdateId: parsedUpdate.updateId,
+        },
+      });
+    }
+
     telegramOkResponse(reply);
     return;
   }
@@ -642,14 +748,26 @@ async function handleTelegramInbound(
     'Telegram response generated',
   );
 
+  const telegramOutboundReply = {
+    to: message.externalSpaceId ?? message.externalUserId ?? message.from,
+    body: responseText,
+    channel: 'telegram' as const,
+  };
+
   try {
-    await sendMessage({
-      to: message.externalSpaceId ?? message.externalUserId ?? message.from,
-      body: responseText,
-      channel: 'telegram',
-    });
+    await sendMessage(telegramOutboundReply);
   } catch (error) {
     const typedError = error instanceof Error ? error : new Error(String(error));
+    incrementCounter('outboundDeliveryFailures');
+    triggerOperationalAlert('outbound_delivery_failed', 'Failed to deliver Telegram reply', {
+      channel: message.channel,
+      phone: message.from,
+      messageId: message.id,
+      telegramUpdateId: parsedUpdate.updateId,
+    });
+
+    await enqueueFailedOutboundMessage(message, telegramOutboundReply, typedError, PROCESS_RETRY_LIMIT);
+
     reportError(typedError, {
       tags: {
         channel: message.channel,

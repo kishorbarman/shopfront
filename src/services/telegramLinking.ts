@@ -56,9 +56,11 @@ export async function consumeTelegramLinkCode(code: string): Promise<string | nu
   return shopId;
 }
 
+export type TelegramCommand = 'start' | 'help' | 'link' | 'status' | 'site' | 'support';
+
 export function parseTelegramLinkCommand(
   text: string,
-): { command: 'start' | 'help' | 'link'; code?: string } | null {
+): { command: TelegramCommand; code?: string } | null {
   const trimmed = text.trim();
   if (!trimmed.startsWith('/')) {
     return null;
@@ -73,6 +75,18 @@ export function parseTelegramLinkCommand(
 
   if (command === '/help') {
     return { command: 'help' };
+  }
+
+  if (command === '/status') {
+    return { command: 'status' };
+  }
+
+  if (command === '/site') {
+    return { command: 'site' };
+  }
+
+  if (command === '/support') {
+    return { command: 'support' };
   }
 
   if (command === '/link') {

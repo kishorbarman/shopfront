@@ -8,7 +8,15 @@ const redis = new Redis(process.env.REDIS_URL);
 const phone = '+15550009999';
 
 let addMessage: (phone: string, role: 'user' | 'agent', content: string) => Promise<void>;
-let checkRateLimit: (phone: string) => Promise<{ allowed: boolean; remaining: number }>;
+let checkRateLimit: (
+  phone: string,
+  channel?: 'sms' | 'whatsapp' | 'telegram',
+) => Promise<{ allowed: boolean; remaining: number; limit: number; count: number }>;
+let checkSpamGuard: (
+  phone: string,
+  channel: 'sms' | 'whatsapp' | 'telegram',
+  body: string,
+) => Promise<{ allowed: boolean; count: number }>;
 let clearState: (phone: string) => Promise<void>;
 let getHistory: (phone: string) => Promise<Array<{ role: string; content: string }>>;
 let getState: (phone: string) => Promise<unknown>;
@@ -21,6 +29,7 @@ test.before(async () => {
 
   addMessage = conversationStateModule.addMessage;
   checkRateLimit = conversationStateModule.checkRateLimit;
+  checkSpamGuard = conversationStateModule.checkSpamGuard;
   clearState = conversationStateModule.clearState;
   getHistory = conversationStateModule.getHistory;
   getState = conversationStateModule.getState;
@@ -81,17 +90,49 @@ test('addMessage and getHistory keep only the last 10 messages', async () => {
   assert.equal(history[9]?.content, 'message-12');
 });
 
-test('checkRateLimit allows 20 messages and blocks after limit', async () => {
-  let lastResult = { allowed: true, remaining: 20 };
+test('checkRateLimit enforces SMS at 20 per hour', async () => {
+  let lastResult = { allowed: true, remaining: 20, limit: 20, count: 0 };
 
   for (let i = 1; i <= 20; i += 1) {
-    lastResult = await checkRateLimit(phone);
+    lastResult = await checkRateLimit(phone, 'sms');
   }
 
   assert.equal(lastResult.allowed, true);
+  assert.equal(lastResult.limit, 20);
   assert.equal(lastResult.remaining, 0);
 
-  const blocked = await checkRateLimit(phone);
+  const blocked = await checkRateLimit(phone, 'sms');
   assert.equal(blocked.allowed, false);
   assert.equal(blocked.remaining, 0);
+});
+
+test('checkRateLimit allows a higher Telegram threshold', async () => {
+  let result = { allowed: true, remaining: 60, limit: 60, count: 0 };
+
+  for (let i = 1; i <= 60; i += 1) {
+    result = await checkRateLimit(phone, 'telegram');
+  }
+
+  assert.equal(result.allowed, true);
+  assert.equal(result.limit, 60);
+  assert.equal(result.remaining, 0);
+
+  const blocked = await checkRateLimit(phone, 'telegram');
+  assert.equal(blocked.allowed, false);
+  assert.equal(blocked.remaining, 0);
+});
+
+test('checkSpamGuard blocks repeated duplicate payload bursts', async () => {
+  let guard = { allowed: true, count: 0 };
+
+  for (let i = 1; i <= 4; i += 1) {
+    guard = await checkSpamGuard(phone, 'telegram', 'same payload every time');
+  }
+
+  assert.equal(guard.allowed, true);
+  assert.equal(guard.count, 4);
+
+  const blocked = await checkSpamGuard(phone, 'telegram', 'same payload every time');
+  assert.equal(blocked.allowed, false);
+  assert.equal(blocked.count, 5);
 });

@@ -1,5 +1,6 @@
 import type { Hour, Notice, Service, Shop } from '@prisma/client';
 
+import config from '../config';
 import { classifyIntent, isPhotoIntentFromMedia } from '../agent/classifier';
 import {
   extractMutationEntities,
@@ -9,9 +10,10 @@ import {
 import type { IntentCategory } from '../agent/intents';
 import { runOnboarding } from '../agent/onboarding';
 import { routeMessage } from '../agent/router';
-import { AgentParseError, DatabaseError, RateLimitError, ValidationError } from '../lib/errors';
+import { AgentParseError, DatabaseError, RateLimitError, SpamGuardError, ValidationError } from '../lib/errors';
 import logger from '../lib/logger';
 import { reportError } from '../lib/observability';
+import { incrementCounter } from '../lib/opsMetrics';
 import { prisma } from '../lib/prisma';
 import { findIdentityByExternalUserId, upsertChannelIdentity } from './channelIdentity';
 import type { InboundMessage } from '../models/types';
@@ -31,6 +33,7 @@ import {
 import {
   addMessage,
   checkRateLimit,
+  checkSpamGuard,
   clearConversationData,
   getHistory,
   getState,
@@ -104,6 +107,18 @@ function detectPhotoTarget(text: string): PhotoTarget {
   }
 
   return 'unknown';
+}
+
+function parseOperationalCommand(text: string): 'status' | 'site' | 'support' | null {
+  const normalized = text.trim().toLowerCase();
+  if (normalized === '/status' || normalized === 'status') return 'status';
+  if (normalized === '/site' || normalized === 'site') return 'site';
+  if (normalized === '/support' || normalized === 'support') return 'support';
+  return null;
+}
+
+function buildSiteUrl(slug: string): string {
+  return config.BASE_URL.replace(/\/$/, '') + '/s/' + slug;
 }
 
 function describeHourChanges(changes: Array<{ dayOfWeek: number; openTime?: string; closeTime?: string; isClosed?: boolean }>): string {
@@ -436,10 +451,36 @@ export async function processMessage(message: InboundMessage): Promise<string> {
   let lastIntent: IntentCategory | undefined;
 
   try {
-    const rateLimit = await checkRateLimit(message.from);
+    const spamGuard = await checkSpamGuard(message.from, message.channel, message.body);
+    if (!spamGuard.allowed) {
+      incrementCounter('spamBlocks');
+      logger.warn(
+        {
+          event: 'spam_blocked',
+          phone: message.from,
+          channel: message.channel,
+          duplicateCount: spamGuard.count,
+        },
+        'Message blocked by spam guard',
+      );
+      throw new SpamGuardError('User tripped duplicate-message spam guard.');
+    }
+
+    const rateLimit = await checkRateLimit(message.from, message.channel);
 
     if (!rateLimit.allowed) {
-      throw new RateLimitError('User exceeded per-phone rate limit.');
+      incrementCounter('rateLimitBlocks');
+      logger.warn(
+        {
+          event: 'rate_limit_blocked',
+          phone: message.from,
+          channel: message.channel,
+          limit: rateLimit.limit,
+          count: rateLimit.count,
+        },
+        'Message blocked by channel rate limit',
+      );
+      throw new RateLimitError('User exceeded per-channel rate limit.');
     }
 
     existingShop = await loadShopContext(message);
@@ -450,6 +491,50 @@ export async function processMessage(message: InboundMessage): Promise<string> {
     }
 
     await addMessage(message.from, 'user', message.body);
+
+    const operationalCommand = parseOperationalCommand(message.body);
+    if (operationalCommand) {
+      let response: string;
+
+      if (operationalCommand === 'support') {
+        response =
+          'Support: I will troubleshoot first. If I am not confident, I escalate to a human specialist. You can also email contact@shopfront.page.';
+      } else if (operationalCommand === 'status') {
+        if (!existingShop) {
+          response =
+            'Status: no active shop found for this account yet. Tell me your business name to start onboarding.';
+        } else {
+          const pending = state.pendingAction?.intent ? ', pending=' + state.pendingAction.intent : '';
+          response =
+            'Status: ' +
+            existingShop.name +
+            ' (' +
+            existingShop.status +
+            '), mode=' +
+            state.mode +
+            pending +
+            '.';
+        }
+      } else {
+        if (!existingShop) {
+          response = 'No live site yet. Complete onboarding first and then use this command again.';
+        } else {
+          response = 'Your live site: ' + buildSiteUrl(existingShop.slug);
+        }
+      }
+
+      state = {
+        ...state,
+        mode: existingShop ? 'active' : state.mode,
+        shopId: existingShop?.id ?? state.shopId,
+        pendingAction: undefined,
+        lastMessageAt: new Date().toISOString(),
+      };
+
+      await setState(message.from, state);
+      await addMessage(message.from, 'agent', response);
+      return response;
+    }
 
     let response: string;
 

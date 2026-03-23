@@ -49,4 +49,30 @@ export function reportError(error: unknown, options?: ReportOptions): void {
   });
 }
 
+export function triggerOperationalAlert(
+  code: string,
+  message: string,
+  details?: Record<string, unknown>,
+): void {
+  const error = new Error(code + ': ' + message);
+
+  logger.error(
+    {
+      event: 'alert_triggered',
+      code,
+      message,
+      ...(details ?? {}),
+    },
+    'Operational alert triggered',
+  );
+
+  reportError(error, {
+    tags: {
+      alertCode: code,
+      severity: 'high',
+    },
+    extra: details,
+  });
+}
+
 export { Sentry };

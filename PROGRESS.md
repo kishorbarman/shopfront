@@ -857,3 +857,40 @@ Validation completed:
 
 Notes:
 - Some legacy integration tests import app modules before top-level env assignment executes under ESM. Running those tests with `NODE_ENV=development` in the command environment is currently required for stable local execution.
+
+### Phase 8 - Post-Launch Hardening (Completed)
+Date: 2026-03-22
+
+What was implemented:
+- Telegram failures integrated into dead-letter/replay flow:
+  - Added outbound failure enqueue path in `src/services/failedMessageQueue.ts`
+  - Added replay service in `src/services/failedMessageReplay.ts`
+  - Updated `scripts/replay-failed.ts` to use replay service
+- Channel-aware guardrails:
+  - `checkRateLimit(phone, channel)` now uses per-channel thresholds
+  - Added anti-spam duplicate burst guard in `src/services/conversationState.ts`
+- Operational commands:
+  - Added `/status`, `/site`, `/support` command handling for Telegram and shared agent path
+  - Extended Telegram command parsing in `src/services/telegramLinking.ts`
+  - Added operator docs in `docs/OPERATIONS.md`
+- Alerting + metrics:
+  - Added operational counters in `src/lib/opsMetrics.ts`
+  - Added alert trigger helper in `src/lib/observability.ts`
+  - Webhook auth failures and outbound delivery failures now increment counters and trigger alerts
+  - `/metrics` now exposes `webhookAuthFailures`, `outboundDeliveryFailures`, `rateLimitBlocks`, `spamBlocks`
+
+Validation completed:
+- `npm run build` passed.
+- Tests passed:
+  - `tests/conversationState.test.ts`
+  - `tests/telegramLinking.test.ts`
+  - `tests/failedMessageReplay.test.ts`
+  - `tests/phase8-operations.integration.test.ts`
+- Verified outcomes:
+  - Failed Telegram outbound messages are queued and replayable.
+  - Rate-limit and spam blocks are enforced and tracked in metrics/logs.
+  - `/support` command path responds correctly.
+  - Simulated webhook auth failures and outbound delivery failures increment counters and emit operational alerts.
+
+Notes:
+- Test cleanup was hardened to close Redis clients so integration tests exit reliably.
